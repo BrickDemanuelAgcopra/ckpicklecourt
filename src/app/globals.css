@@ -262,6 +262,8 @@ input, select, textarea { font: inherit; }
 .step-title { font-family: var(--font-display); letter-spacing: .14em; font-size: 12px; font-weight: 700; color: var(--ck-gold-text); margin: 18px 0 8px; }
 .qr-box { background: var(--ck-gold-bg); border-radius: 14px; padding: 16px; text-align: center; }
 .qr-box img { display: block; margin: 0 auto; width: 240px; max-width: 100%; border-radius: 10px; background: #fff; padding: 8px; }
+.guest-receipt { margin-bottom: 12px; }
+.guest-receipt img { display: block; max-width: 100%; max-height: 420px; margin: 8px auto 0; border-radius: 10px; border: 1px solid var(--ck-line-2); background: #fff; }
 .wallet-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
 .wallet-tabs button { flex: 1; border: 1px solid var(--ck-line); background: #fff; color: var(--ck-ink); border-radius: 999px; padding: 9px 12px; font-weight: 700; font-size: 14px; }
 .wallet-tabs button.on { background: var(--ck-green); border-color: var(--ck-green); color: #fff; }

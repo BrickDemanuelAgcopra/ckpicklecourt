@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
-import { BookingError, submitReceipt } from "@/lib/bookings";
-import { saveUpload } from "@/lib/storage";
+import { BookingError, getBooking, submitReceipt } from "@/lib/bookings";
+import { readUpload, saveUpload } from "@/lib/storage";
 import { sendBookingEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
+
+/** The guest's own receipt. The booking UUID in the private tracking link is the access key. */
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const b = await getBooking(id);
+  const f = b?.receipt_path ? await readUpload(b.receipt_path) : null;
+  if (!f) return new NextResponse("Not found", { status: 404 });
+  return new NextResponse(new Uint8Array(f.buf), {
+    headers: { "content-type": f.type, "cache-control": "private, max-age=3600", "x-robots-tag": "noindex", "content-disposition": "inline" },
+  });
+}
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
