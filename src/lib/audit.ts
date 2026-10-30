@@ -19,7 +19,9 @@ export type AuditAction =
   | "open_play_cancelled"
   | "settings_updated"
   | "walkin_usage_saved"
-  | "admin_login";
+  | "admin_login"
+  | "payment_recorded"
+  | "booking_created_admin";
 
 export const AUDIT_LABELS: Record<AuditAction, string> = {
   booking_submitted: "Booking submitted",
@@ -41,6 +43,8 @@ export const AUDIT_LABELS: Record<AuditAction, string> = {
   settings_updated: "Booking settings updated",
   walkin_usage_saved: "Walk-in rental usage saved",
   admin_login: "Admin signed in",
+  payment_recorded: "Payment recorded",
+  booking_created_admin: "Booking entered by admin",
 };
 
 export async function audit(actor: string, action: AuditAction, entityType: string, entityId?: string | number | null, payload?: unknown) {

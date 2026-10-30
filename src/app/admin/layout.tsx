@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSession, touchSession } from "@/lib/auth";
+import "@/components/admin/admin-forms.css";
 
 export const dynamic = "force-dynamic";
 

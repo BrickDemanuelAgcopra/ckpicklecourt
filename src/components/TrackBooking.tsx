@@ -53,9 +53,9 @@ export function BookingCard({ b, sym, showLink = true }: { b: BookingDetail; sym
         <span>Total</span>
         <span>{money(b.total, sym)}</span>
       </div>
-      {b.status === "balance_due" && b.partial_percent ? (
+      {b.status === "balance_due" ? (
         <p className="muted" style={{ marginTop: 8 }}>
-          Partial payment of {b.partial_percent}% received. Please settle the balance at the court.
+          {b.paid > 0 ? `${money(b.paid, sym)} received. ` : ""}Please settle the remaining {money(Math.max(Number(b.total) - b.paid, 0), sym)} at the court.
         </p>
       ) : null}
       {showLink && (

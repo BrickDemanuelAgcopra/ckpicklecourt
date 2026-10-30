@@ -22,7 +22,12 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
   const [cfg, bookings] = await Promise.all([getConfig(), listBookings(view, sp.q)]);
   return (
     <>
-      <h1>Bookings</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+        <h1 style={{ margin: 0 }}>Bookings</h1>
+        <Link href="/admin/bookings/new" className="btn btn-gold btn-sm" style={{ marginLeft: "auto", textDecoration: "none" }}>
+          + New booking
+        </Link>
+      </div>
       <div className="tabs">
         {VIEWS.map(([k, l]) => (
           <Link key={k} href={`/admin/bookings?view=${k}`} className={k === view ? "active" : ""}>
@@ -37,10 +42,10 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
       </div>
       {view === "abandoned" && (
         <div className="note">
-          Holds that never got a receipt. Most are abandoned checkouts; a few may be guests mid-payment right now. Expired ones older than a day can be cleaned up with <b>Delete dirty bookings</b>.
+          Holds that never got a receipt. Most are abandoned checkouts; a few may be guests mid-payment right now. If a guest paid by GCash but didn&apos;t upload the receipt, use <b>Mark as paid</b> while the hold is still active, or <b>+ New booking</b> once it has expired. Expired ones older than a day can be cleaned up with <b>Delete dirty bookings</b>.
         </div>
       )}
-      <BookingsTable bookings={bookings} sym={cfg.currencySymbol} view={view} partialEnabled={cfg.partialPaymentEnabled} />
+      <BookingsTable bookings={bookings} sym={cfg.currencySymbol} view={view} partialEnabled={cfg.partialPaymentEnabled} partialPercent={cfg.partialPaymentPercent} />
     </>
   );
 }

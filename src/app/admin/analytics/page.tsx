@@ -10,6 +10,7 @@ import "./analytics.css";
 export const dynamic = "force-dynamic";
 
 const pct = (v: number, digits = 0) => `${(v * 100).toFixed(digits)}%`;
+const METHOD_NAMES: Record<string, string> = { gcash: "GCash", cash: "Cash", bank: "Bank transfer", other: "Other" };
 const WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const WD_INDEX = [1, 2, 3, 4, 5, 6, 0];
 
@@ -279,7 +280,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <Kpi label="Revenue" value={money(k.revenue)} hint="Total of confirmed and partly paid bookings, by play date">
           <Delta cur={k.revenue} prev={p.revenue} />
         </Kpi>
-        <Kpi label="Collected" value={money(k.collected)} hint="Money actually received: full payments plus deposits">
+        <Kpi label="Collected" value={money(k.collected)} hint="Payments recorded against these bookings (GCash, cash, bank)">
           <span className="kpi-delta flat">{k.revenue ? pct(k.collected / k.revenue) : "—"} of revenue</span>
         </Kpi>
         <Kpi label="Bookings" value={String(k.bookings)}>
@@ -320,9 +321,16 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
               { label: "Booking fees", value: a.mix.fees, tone: "blue" },
             ]}
           />
+          <h4 className="panel-h4">Money received in this period</h4>
+          {a.methods.length ? (
+            <Bars rows={a.methods.map((m) => ({ label: METHOD_NAMES[m.method] ?? m.method, value: m.amount, sub: `${m.count} payment${m.count === 1 ? "" : "s"}` }))} fmt={money} tone="blue" />
+          ) : (
+            <p className="empty">No payments recorded in this period.</p>
+          )}
           {live > 0 && (
             <p className="panel-foot">
-              {a.payments.partial} of {live} bookings ({pct(a.payments.partial / live)}) paid a deposit instead of the full amount.
+              {a.payments.partial} of {live} bookings ({pct(a.payments.partial / live)}) chose to pay a deposit online.{" "}
+              {a.sources.admin > 0 && `${a.sources.admin} were entered by admin (phone, Messenger or walk-in).`}
             </p>
           )}
         </Panel>
@@ -377,7 +385,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         </Panel>
 
         <Panel title="How far ahead people book" sub="Days between booking and playing.">
-          <Columns rows={a.leadTime} total={live} />
+          <Columns rows={a.leadTime} total={a.leadTime.reduce((t, r) => t + r.value, 0)} />
         </Panel>
 
         <Panel title="Session length" sub="Hours per booking.">

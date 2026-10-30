@@ -4,7 +4,7 @@ import { getConfig, getEquipment, getRateBands, getCourts } from "./config";
 import { bandsForDate, equipmentAvailable, priceForHour } from "./availability";
 import { audit } from "./audit";
 import { clubParts, diffDays, isValidISO, todayISO } from "./time";
-import type { BookingDetail, BookingEquipmentRow, BookingRow, BookingSlotRow } from "./types";
+import type { BookingDetail, BookingEquipmentRow, BookingRow, BookingSlotRow, PaymentRow } from "./types";
 
 export type NewBookingInput = {
   date: string;
@@ -29,14 +29,15 @@ function makeConfirmationId(): string {
   return `CK-${s}`;
 }
 
-export async function createHold(input: NewBookingInput): Promise<{ id: string; confirmationId: string; holdExpiresAt: string }> {
+/** `admin` relaxes the guest rules for staff entering phone/walk-in bookings: past dates and hours allowed, no booking fee. */
+export async function createHold(input: NewBookingInput, opts: { admin?: boolean } = {}): Promise<{ id: string; confirmationId: string; holdExpiresAt: string }> {
   const cfg = await getConfig();
   const [bands, courts, equipmentList] = await Promise.all([getRateBands(), getCourts(), getEquipment()]);
 
   if (!isValidISO(input.date)) throw new BookingError("Invalid date");
   const today = todayISO();
   const d = diffDays(today, input.date);
-  if (d < 0 || d > cfg.bookingWindowDays) throw new BookingError("That date is outside the booking window");
+  if (opts.admin ? d < -60 || d > 366 : d < 0 || d > cfg.bookingWindowDays) throw new BookingError("That date is outside the booking window");
   if (!input.slots.length) throw new BookingError("Select at least one hour");
   if (input.slots.length > 12) throw new BookingError("Too many hours in one booking");
   const name = input.guestName.trim();
@@ -59,7 +60,7 @@ export async function createHold(input: NewBookingInput): Promise<{ id: string; 
     if (!court) throw new BookingError("That court is not available");
     const price = priceForHour(dayBands, input.date, s.hour);
     if (price == null) throw new BookingError("That hour is outside booking hours");
-    if (input.date === today && s.hour <= now.hour) throw new BookingError("That hour has already passed");
+    if (!opts.admin && input.date === today && s.hour <= now.hour) throw new BookingError("That hour has already passed");
     priced.push({ courtId: s.courtId, hour: s.hour, price });
     subtotal += price;
   }
@@ -91,7 +92,7 @@ export async function createHold(input: NewBookingInput): Promise<{ id: string; 
     equipmentTotal += item.price * e.qty;
   }
 
-  const fee = cfg.bookingFeePerHour ? cfg.bookingFee * priced.length : cfg.bookingFee;
+  const fee = opts.admin ? 0 : cfg.bookingFeePerHour ? cfg.bookingFee * priced.length : cfg.bookingFee;
   const total = subtotal + equipmentTotal + fee;
   const holdMinutes = Math.max(1, cfg.paymentWindowMinutes || 5);
 
@@ -160,7 +161,11 @@ export async function hydrate(b: BookingRow): Promise<BookingDetail> {
     "SELECT e.equipment_id, q.name, q.unit, e.qty, e.unit_price FROM booking_equipment e JOIN equipment q ON q.id=e.equipment_id WHERE e.booking_id=$1",
     [b.id]
   );
-  return { ...b, slots, equipment };
+  const payments = await query<PaymentRow>(
+    "SELECT id, amount, method, reference, note, received_at, recorded_by FROM payments WHERE booking_id=$1 ORDER BY received_at, id",
+    [b.id]
+  );
+  return { ...b, slots, equipment, payments, paid: payments.reduce((s, p) => s + Number(p.amount), 0) };
 }
 
 export async function submitReceipt(id: string, receiptPath: string, partial: boolean): Promise<BookingDetail> {

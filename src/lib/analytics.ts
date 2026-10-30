@@ -25,6 +25,8 @@ type BookingRow = {
   booking_fee: string;
   total: string;
   partial_percent: number | null;
+  source: string;
+  paid: string;
   created_at: Date;
   submitted_at: Date | null;
   confirmed_at: Date | null;
@@ -70,6 +72,8 @@ export type Analytics = {
   topCustomers: { name: string; phone: string; bookings: number; hours: number; spend: number; last: string }[];
   equipment: { name: string; qty: number; revenue: number; bookings: number }[];
   equipmentAttach: number; // share of live bookings with any rental
+  methods: { method: string; amount: number; count: number }[];
+  sources: { online: number; admin: number };
 };
 
 const n = (v: string | number | null | undefined) => Number(v ?? 0);
@@ -77,11 +81,6 @@ const phoneKey = (p: string) => p.replace(/\D/g, "").slice(-10);
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function collectedOf(b: BookingRow) {
-  if (b.status === "confirmed") return n(b.total);
-  if (b.status === "balance_due") return Math.round((n(b.total) * (b.partial_percent ?? 0)) / 100);
-  return 0;
-}
 
 export function resolveRange(sp: { range?: string; from?: string; to?: string }, earliest: string | null): { range: RangeKey; from: string; to: string } {
   const today = todayISO();
@@ -125,12 +124,13 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
   const prevFrom = addDaysISO(prevTo, -(days - 1));
   const today = todayISO();
 
-  const BOOKING_COLS = `b.id, b.status, b.guest_name, b.guest_phone, b.subtotal, b.equipment_total, b.booking_fee, b.total, b.partial_percent,
+  const BOOKING_COLS = `b.id, b.status, b.guest_name, b.guest_phone, b.subtotal, b.equipment_total, b.booking_fee, b.total, b.partial_percent, b.source,
+    coalesce((SELECT sum(amount) FROM payments WHERE booking_id=b.id),0) AS paid,
     b.created_at, b.submitted_at, b.confirmed_at,
     to_char(s.play_date,'YYYY-MM-DD') AS play_date, coalesce(s.hours,0)::int AS hours`;
   const SLOT_AGG = `LEFT JOIN LATERAL (SELECT min(date) AS play_date, count(*) AS hours FROM booking_slots WHERE booking_id=b.id) s ON true`;
 
-  const [courts, bands, live, created, slots, overrides, equipment, firstSeen, snapshot, next7] = await Promise.all([
+  const [courts, bands, live, created, slots, overrides, equipment, firstSeen, snapshot, next7, methods] = await Promise.all([
     getCourts(),
     getRateBands(),
     // live bookings played in this period or the previous one (for deltas)
@@ -159,13 +159,20 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
       [LIVE]
     ),
     query<{ status: string; c: string; v: string; due: string }>(
-      `SELECT status, count(*) AS c, sum(total) AS v, sum(total - round(total*coalesce(partial_percent,0)/100.0)) AS due
-       FROM bookings WHERE status IN ('pending','awaiting_payment','balance_due') GROUP BY status`
+      `SELECT status, count(*) AS c, sum(total) AS v,
+              sum(greatest(total - coalesce((SELECT sum(amount) FROM payments p WHERE p.booking_id=b.id),0), 0)) AS due
+       FROM bookings b WHERE status IN ('pending','awaiting_payment','balance_due') GROUP BY status`
     ),
     query<{ hours: string; revenue: string }>(
       `SELECT count(*) AS hours, coalesce(sum(s.price),0) AS revenue FROM booking_slots s JOIN bookings b ON b.id=s.booking_id
        WHERE b.status = ANY($1) AND s.date BETWEEN $2 AND $3`,
       [LIVE, today, addDaysISO(today, 6)]
+    ),
+    // money that actually came in during the period, by when it was received
+    query<{ method: string; amount: string; c: string }>(
+      `SELECT method, sum(amount) AS amount, count(*) AS c FROM payments
+       WHERE (received_at AT TIME ZONE 'Asia/Manila')::date BETWEEN $1 AND $2 GROUP BY method ORDER BY 2 DESC`,
+      [from, to]
     ),
   ]);
 
@@ -191,7 +198,7 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
     const capacity = capacityOf(a, b);
     return {
       revenue,
-      collected: rows.reduce((s, r) => s + collectedOf(r), 0),
+      collected: rows.reduce((s, r) => s + n(r.paid), 0),
       bookings: rows.length,
       hours,
       capacity,
@@ -256,14 +263,16 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
   // Monday-first reads more naturally for a week.
   byWeekday.push(byWeekday.shift()!);
 
+  // the funnel is about the website checkout; staff-entered bookings skip it
+  const online = created.filter((b) => b.source !== "admin");
   const funnel = {
-    started: created.length,
-    submitted: created.filter((b) => b.submitted_at).length,
-    confirmed: created.filter((b) => LIVE.includes(b.status)).length,
-    expired: created.filter((b) => b.status === "expired").length,
-    declined: created.filter((b) => b.status === "declined").length,
-    cancelled: created.filter((b) => b.status === "cancelled").length,
-    open: created.filter((b) => b.status === "pending" || b.status === "awaiting_payment").length,
+    started: online.length,
+    submitted: online.filter((b) => b.submitted_at).length,
+    confirmed: online.filter((b) => LIVE.includes(b.status)).length,
+    expired: online.filter((b) => b.status === "expired").length,
+    declined: online.filter((b) => b.status === "declined").length,
+    cancelled: online.filter((b) => b.status === "cancelled").length,
+    open: online.filter((b) => b.status === "pending" || b.status === "awaiting_payment").length,
   };
 
   // Lead time: days between booking and playing, in club time.
@@ -277,6 +286,7 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
   ] as const;
   const leadCounts = LEAD.map(() => 0);
   for (const b of inRange) {
+    if (b.source === "admin") continue; // staff often enter these after the fact
     const lead = diffDays(todayISO(new Date(b.created_at)), b.play_date!);
     const i = LEAD.findIndex(([, lo, hi]) => lead >= lo && lead <= hi);
     if (i >= 0) leadCounts[i]++;
@@ -288,7 +298,7 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
   const duration = ["1 hour", "2 hours", "3 hours", "4+ hours"].map((label, i) => ({ label, value: durCounts[i] }));
 
   const waits = created
-    .filter((b) => b.submitted_at && b.confirmed_at && b.confirmed_at >= b.submitted_at)
+    .filter((b) => b.source !== "admin" && b.submitted_at && b.confirmed_at && b.confirmed_at >= b.submitted_at)
     .map((b) => (b.confirmed_at!.getTime() - b.submitted_at!.getTime()) / 60000)
     .sort((a, b) => a - b);
   const pct = (p: number) => (waits.length ? waits[Math.min(waits.length - 1, Math.floor(p * waits.length))] : null);
@@ -339,6 +349,8 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
       fees: inRange.reduce((s, r) => s + n(r.booking_fee), 0),
     },
     payments: { full: inRange.filter((b) => !b.partial_percent).length, partial: inRange.filter((b) => b.partial_percent).length },
+    methods: methods.map((m) => ({ method: m.method, amount: n(m.amount), count: n(m.c) })),
+    sources: { online: inRange.filter((b) => b.source !== "admin").length, admin: inRange.filter((b) => b.source === "admin").length },
     heatmap: { hours: allHours, cells },
     byCourt,
     byBand,

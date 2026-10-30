@@ -86,10 +86,14 @@ export type BookingRow = {
   submitted_at: string | null;
   confirmed_at: string | null;
   confirmed_by: string | null;
+  source: "online" | "admin";
   created_at: string;
 };
 
 export type BookingSlotRow = { court_id: number; court_name: string; date: string; hour: number; price: string };
 export type BookingEquipmentRow = { equipment_id: number; name: string; unit: string; qty: number; unit_price: string };
 
-export type BookingDetail = BookingRow & { slots: BookingSlotRow[]; equipment: BookingEquipmentRow[] };
+export type PaymentMethod = "gcash" | "cash" | "bank" | "other";
+export type PaymentRow = { id: number; amount: string; method: PaymentMethod; reference: string | null; note: string | null; received_at: string; recorded_by: string };
+
+export type BookingDetail = BookingRow & { slots: BookingSlotRow[]; equipment: BookingEquipmentRow[]; payments: PaymentRow[]; paid: number };

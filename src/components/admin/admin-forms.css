@@ -1,0 +1,26 @@
+/* Payment dialog + new-booking form */
+.pay-modal h3 { font-size: 17px; margin-bottom: 0; }
+.pay-modal label, .nb label { display: block; font-size: 13px; font-weight: 600; color: var(--ck-ink); }
+.pay-modal input, .nb input { border: 1px solid var(--ck-line); border-radius: 10px; padding: 9px 11px; font-size: 14px; background: #fff; color: var(--ck-ink); width: 100%; display: block; margin-top: 4px; }
+.pay-modal { display: grid; gap: 12px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.pay-fields { display: grid; gap: 12px; }
+.pay-presets, .pay-methods { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; }
+.pay-summary { display: flex; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.pay-summary span { background: #faf6ec; border-radius: 8px; padding: 6px 10px; color: var(--ck-ink-faint); }
+.pay-summary b { color: var(--ck-ink); margin-left: 4px; }
+.pay-line { font-size: 12px; color: var(--ck-ink-soft); white-space: nowrap; }
+.pay-due { font-size: 12px; font-weight: 700; color: var(--ck-gold-text); }
+
+.nb { display: grid; gap: 12px; max-width: 760px; }
+.nb-card { background: #fff; border: 1px solid var(--ck-line-2); border-radius: 16px; padding: 16px 18px; }
+.nb-card h3 { font-size: 15px; margin-bottom: 10px; }
+.nb-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.nb-hours { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
+.nb-hour { display: grid; gap: 1px; border: 1px solid var(--ck-slot-open-border); background: var(--ck-slot-open-bg); color: var(--ck-slot-open-text); border-radius: 10px; padding: 7px 4px; font-size: 13px; }
+.nb-hour small { font-size: 11px; opacity: .8; }
+.nb-hour.on { background: var(--ck-green); border-color: var(--ck-green); color: #fff; }
+.nb-hour.taken { background: var(--ck-slot-closed-bg); border-color: transparent; color: var(--ck-slot-closed-text); text-transform: capitalize; }
+.nb-total { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; color: var(--ck-ink-soft); }
+.nb-total b { font-size: 22px; color: var(--ck-ink); }
+.nb > .btn { justify-self: start; }
