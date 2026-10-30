@@ -19,6 +19,8 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/db ./db
 COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/node_modules/bcryptjs ./node_modules/bcryptjs
+# nodemailer too, for the test email in scripts/setup-email.sh
+COPY --from=build /app/node_modules/nodemailer ./node_modules/nodemailer
 COPY docker/entrypoint.sh ./entrypoint.sh
 RUN chmod +x entrypoint.sh && mkdir -p /app/data && chown -R node:node /app
 USER node
