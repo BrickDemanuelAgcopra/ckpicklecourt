@@ -1,11 +1,11 @@
-import { requireAdminPage } from "@/lib/admin";
+import { requireOwnerPage } from "@/lib/admin";
 import { query } from "@/lib/db";
 import { AUDIT_LABELS, type AuditAction } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
 export default async function AuditPage() {
-  await requireAdminPage();
+  await requireOwnerPage();
   const rows = await query<{ id: number; actor: string; action_type: AuditAction; entity_type: string; entity_id: string | null; payload: unknown; created_at: string }>(
     "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 300"
   );

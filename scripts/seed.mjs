@@ -75,8 +75,8 @@ await db.query(`INSERT INTO equipment(slug,name,unit,price,inventory_total)
 if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
   const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
   await db.query(
-    `INSERT INTO admin_users(email,password_hash) VALUES($1,$2)
-     ON CONFLICT (email) DO UPDATE SET password_hash=EXCLUDED.password_hash`,
+    `INSERT INTO admin_users(email,password_hash,role) VALUES($1,$2,'owner')
+     ON CONFLICT (email) DO UPDATE SET password_hash=EXCLUDED.password_hash, role='owner'`,
     [process.env.ADMIN_EMAIL.toLowerCase(), hash]
   );
   console.log("admin user ready:", process.env.ADMIN_EMAIL);

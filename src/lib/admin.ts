@@ -6,3 +6,10 @@ export async function requireAdminPage(): Promise<AdminSession> {
   if (!s) redirect("/admin/login");
   return s;
 }
+
+/** Audit log and user management are for the owner only. */
+export async function requireOwnerPage(): Promise<AdminSession> {
+  const s = await requireAdminPage();
+  if (s.role !== "owner") redirect("/admin/analytics");
+  return s;
+}

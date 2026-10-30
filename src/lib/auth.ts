@@ -12,7 +12,9 @@ function secret() {
   return new TextEncoder().encode(s);
 }
 
-export type AdminSession = { email: string; role: string };
+/** owner = the ADMIN_EMAIL account from .env (full access incl. audit log and users); admin = everything else. */
+export type AdminRole = "owner" | "admin";
+export type AdminSession = { email: string; role: AdminRole };
 
 export async function verifyAdmin(email: string, password: string): Promise<AdminSession | null> {
   const rows = await query<{ email: string; password_hash: string; role: string }>("SELECT email,password_hash,role FROM admin_users WHERE email=$1", [
@@ -20,7 +22,7 @@ export async function verifyAdmin(email: string, password: string): Promise<Admi
   ]);
   if (!rows.length) return null;
   const ok = await bcrypt.compare(password, rows[0].password_hash);
-  return ok ? { email: rows[0].email, role: rows[0].role } : null;
+  return ok ? { email: rows[0].email, role: rows[0].role === "owner" ? "owner" : "admin" } : null;
 }
 
 export async function setSession(s: AdminSession) {
@@ -44,7 +46,10 @@ export async function getSession(): Promise<AdminSession | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
-    return { email: String(payload.email), role: String(payload.role ?? "admin") };
+    // Role comes from the database, not the cookie, so removing a user or changing a role takes effect at once.
+    const rows = await query<{ role: string }>("SELECT role FROM admin_users WHERE email=$1", [String(payload.email)]);
+    if (!rows.length) return null;
+    return { email: String(payload.email), role: rows[0].role === "owner" ? "owner" : "admin" };
   } catch {
     return null;
   }

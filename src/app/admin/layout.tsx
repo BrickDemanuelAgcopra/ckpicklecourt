@@ -4,13 +4,15 @@ import "@/components/admin/admin-forms.css";
 
 export const dynamic = "force-dynamic";
 
-const LINKS = [
+const LINKS: [string, string, "owner"?][] = [
   ["/admin/analytics", "Analytics"],
   ["/admin/bookings", "Bookings"],
   ["/admin/grid", "Court grid"],
   ["/admin/equipment", "Equipment"],
   ["/admin/settings", "Settings"],
-  ["/admin/audit", "Audit log"],
+  ["/admin/account", "My account"],
+  ["/admin/users", "Users", "owner"],
+  ["/admin/audit", "Audit log", "owner"],
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -22,7 +24,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <aside className="admin-side">
         <div style={{ fontWeight: 800, color: "var(--ck-gold)", marginBottom: 2 }}>Chateau Katriannah</div>
         <div className="muted" style={{ color: "rgba(255,255,255,.6)", marginBottom: 16 }}>Admin · {session.email}</div>
-        {LINKS.map(([href, label]) => (
+        {LINKS.filter(([, , only]) => !only || session.role === only).map(([href, label]) => (
           <Link key={href} href={href}>
             {label}
           </Link>

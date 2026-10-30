@@ -21,7 +21,11 @@ export type AuditAction =
   | "walkin_usage_saved"
   | "admin_login"
   | "payment_recorded"
-  | "booking_created_admin";
+  | "booking_created_admin"
+  | "admin_user_added"
+  | "admin_user_removed"
+  | "admin_password_reset"
+  | "admin_password_changed";
 
 export const AUDIT_LABELS: Record<AuditAction, string> = {
   booking_submitted: "Booking submitted",
@@ -45,6 +49,10 @@ export const AUDIT_LABELS: Record<AuditAction, string> = {
   admin_login: "Admin signed in",
   payment_recorded: "Payment recorded",
   booking_created_admin: "Booking entered by admin",
+  admin_user_added: "Admin user added",
+  admin_user_removed: "Admin user removed",
+  admin_password_reset: "Admin password reset",
+  admin_password_changed: "Admin changed own password",
 };
 
 export async function audit(actor: string, action: AuditAction, entityType: string, entityId?: string | number | null, payload?: unknown) {
