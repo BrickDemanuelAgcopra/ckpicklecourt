@@ -4,6 +4,7 @@ import { getSession, touchSession } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 const LINKS = [
+  ["/admin/analytics", "Analytics"],
   ["/admin/bookings", "Bookings"],
   ["/admin/grid", "Court grid"],
   ["/admin/equipment", "Equipment"],
