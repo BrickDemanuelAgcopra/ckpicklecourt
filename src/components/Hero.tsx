@@ -54,7 +54,7 @@ export default function Hero({ cfg, courtCount }: { cfg: SiteConfig; courtCount:
                     setLb(0);
                   }}
                 >
-                  <Ic.Grid2x2 size={14} /> Show all photos
+                  <Ic.Grid2x2 size={14} /> <span className="show-all-text">Show all photos</span>
                 </button>
               )}
             </div>

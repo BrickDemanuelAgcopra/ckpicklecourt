@@ -81,7 +81,7 @@ export default function BookingWidget({ cfg, today, initial, equipment }: { cfg:
               <p>{longDate(date)}</p>
             </div>
             <label className="jump">
-              <Ic.Calendar size={14} /> Jump to date
+              <Ic.Calendar size={14} /> <span className="jump-text">Jump to date</span>
               <input type="date" aria-label="Jump to date" min={today} max={maxDate} value={date} onChange={(e) => {
                 const v = e.target.value;
                 if (!v || v < today || v > maxDate) return;
@@ -121,7 +121,7 @@ export default function BookingWidget({ cfg, today, initial, equipment }: { cfg:
             <span>{cfg.openingHoursText}</span>
           </div>
 
-          <div className="grid" style={{ gridTemplateColumns: `88px repeat(${grid.courts.length}, 1fr)` }}>
+          <div className="grid" style={{ gridTemplateColumns: `var(--time-col) repeat(${grid.courts.length}, minmax(0, 1fr))` }}>
             <div />
             {grid.courts.map((c) => (
               <div className="court-h" key={c.id}>
