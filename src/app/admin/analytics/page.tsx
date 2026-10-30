@@ -10,7 +10,7 @@ import "./analytics.css";
 export const dynamic = "force-dynamic";
 
 const pct = (v: number, digits = 0) => `${(v * 100).toFixed(digits)}%`;
-const METHOD_NAMES: Record<string, string> = { gcash: "GCash", cash: "Cash", bank: "Bank transfer", other: "Other" };
+const METHOD_NAMES: Record<string, string> = { gcash: "GCash", maya: "Maya", cash: "Cash", bank: "Bank transfer", other: "Other" };
 const WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const WD_INDEX = [1, 2, 3, 4, 5, 6, 0];
 

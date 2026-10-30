@@ -17,6 +17,9 @@ export default function Checkout({ cfg, booking }: { cfg: SiteConfig; booking: B
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [qrFull, setQrFull] = useState(false);
+  const wallets = [cfg.payment, ...(cfg.paymentAlt?.qrUrl ? [cfg.paymentAlt] : [])];
+  const [walletIdx, setWalletIdx] = useState(0);
+  const wallet = wallets[walletIdx] ?? cfg.payment;
   const fileRef = useRef<HTMLInputElement>(null);
   const awaiting = booking.status === "awaiting_payment";
 
@@ -98,7 +101,7 @@ export default function Checkout({ cfg, booking }: { cfg: SiteConfig; booking: B
           </div>
           <div style={{ textAlign: "right" }}>
             <div className="eyebrow" style={{ color: "var(--ck-ink-faint)" }}>Time left to pay</div>
-            <div className="countdown">
+            <div className="countdown" suppressHydrationWarning>
               {mm}:{ss}
             </div>
           </div>
@@ -108,20 +111,29 @@ export default function Checkout({ cfg, booking }: { cfg: SiteConfig; booking: B
         </p>
 
         <div className="step-title">Step 1: Scan the QR code to pay</div>
+        {wallets.length > 1 && (
+          <div className="wallet-tabs" role="tablist">
+            {wallets.map((w, i) => (
+              <button key={w.bankName + i} role="tab" aria-selected={i === walletIdx} className={i === walletIdx ? "on" : ""} onClick={() => setWalletIdx(i)}>
+                {w.bankName}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="qr-box">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={cfg.payment.qrUrl} alt={`${cfg.payment.bankName} QR code`} onClick={() => setQrFull(true)} style={{ cursor: "zoom-in" }} />
+          <img src={wallet.qrUrl} alt={`${wallet.bankName} QR code`} onClick={() => setQrFull(true)} style={{ cursor: "zoom-in" }} />
           <p className="muted" style={{ margin: "6px 0 0" }}>Tap the QR to view it full screen</p>
           <div className="bank-lines">
             <div>
-              <b>{cfg.payment.bankName}</b> · {cfg.payment.accountName}
+              <b>{wallet.bankName}</b> · {wallet.accountName}
             </div>
-            <div className="mono">{cfg.payment.accountNumber}</div>
+            {wallet.accountNumber && <div className="mono">{wallet.accountNumber}</div>}
             <div style={{ marginTop: 8, fontSize: 16 }}>
               Amount to pay: <b>{money(payNow, sym)}</b>
             </div>
           </div>
-          <a className="btn btn-outline btn-sm" href={cfg.payment.qrUrl} download style={{ marginTop: 10, background: "#fff" }}>
+          <a className="btn btn-outline btn-sm" href={wallet.qrUrl} download style={{ marginTop: 10, background: "#fff" }}>
             <Ic.Download size={14} /> Download QR
           </a>
         </div>
@@ -172,7 +184,7 @@ export default function Checkout({ cfg, booking }: { cfg: SiteConfig; booking: B
       {qrFull && (
         <div className="lightbox" onClick={() => setQrFull(false)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={cfg.payment.qrUrl} alt="Payment QR" style={{ background: "#fff", padding: 16 }} />
+          <img src={wallet.qrUrl} alt="Payment QR" style={{ background: "#fff", padding: 16 }} />
           <button className="close" onClick={() => setQrFull(false)}>
             ✕
           </button>

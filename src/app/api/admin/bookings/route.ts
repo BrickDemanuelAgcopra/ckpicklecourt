@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const Payment = z.object({
   amount: z.number().positive().max(1_000_000),
-  method: z.enum(["gcash", "cash", "bank", "other"]),
+  method: z.enum(["gcash", "maya", "cash", "bank", "other"]),
   reference: z.string().max(80).optional(),
   note: z.string().max(300).optional(),
 });

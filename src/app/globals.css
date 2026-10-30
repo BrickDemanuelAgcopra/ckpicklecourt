@@ -262,6 +262,9 @@ input, select, textarea { font: inherit; }
 .step-title { font-family: var(--font-display); letter-spacing: .14em; font-size: 12px; font-weight: 700; color: var(--ck-gold-text); margin: 18px 0 8px; }
 .qr-box { background: var(--ck-gold-bg); border-radius: 14px; padding: 16px; text-align: center; }
 .qr-box img { display: block; margin: 0 auto; width: 240px; max-width: 100%; border-radius: 10px; background: #fff; padding: 8px; }
+.wallet-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.wallet-tabs button { flex: 1; border: 1px solid var(--ck-line); background: #fff; color: var(--ck-ink); border-radius: 999px; padding: 9px 12px; font-weight: 700; font-size: 14px; }
+.wallet-tabs button.on { background: var(--ck-green); border-color: var(--ck-green); color: #fff; }
 .countdown { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 28px; color: var(--ck-green); }
 .bank-lines { font-size: 13.5px; margin-top: 10px; }
 .bank-lines b { color: var(--ck-ink); }

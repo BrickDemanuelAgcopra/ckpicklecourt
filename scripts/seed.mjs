@@ -34,6 +34,12 @@ const config = {
     accountNumber: "09XX XXX XXXX",
     qrUrl: "/brand/payment-qr.png",
   },
+  paymentAlt: {
+    bankName: "Maya",
+    accountName: "Chateau Katriannah Pickleball Club",
+    accountNumber: "",
+    qrUrl: "/brand/maya-qr.jpg",
+  },
   gallery: ["/images/hero.jpg", "/images/court-2.jpg", "/images/court-3.jpg", "/images/court-4.jpg", "/images/court-5.jpg"],
   slotColors: {},
   showRateSeparators: true,

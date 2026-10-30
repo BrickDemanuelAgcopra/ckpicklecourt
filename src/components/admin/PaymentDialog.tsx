@@ -5,6 +5,7 @@ import type { PaymentMethod } from "@/lib/types";
 
 export const METHODS: [PaymentMethod, string][] = [
   ["gcash", "GCash"],
+  ["maya", "Maya"],
   ["cash", "Cash"],
   ["bank", "Bank transfer"],
   ["other", "Other"],

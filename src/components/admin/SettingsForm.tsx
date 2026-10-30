@@ -39,7 +39,7 @@ export default function SettingsForm({ cfg: initial, courts: initialCourts, band
     setMsg(r.ok ? "Saved." : j.error || "Failed");
     if (r.ok) router.refresh();
   };
-  const upload = async (kind: "qr" | "logo", file: File) => {
+  const upload = async (kind: "qr" | "qr2" | "logo", file: File) => {
     const fd = new FormData();
     fd.append("kind", kind);
     fd.append("file", file);
@@ -48,14 +48,16 @@ export default function SettingsForm({ cfg: initial, courts: initialCourts, band
     setMsg(r.ok ? "Uploaded." : j.error);
     if (r.ok) {
       if (kind === "qr") setCfg({ ...cfg, payment: { ...cfg.payment, qrUrl: j.url } });
+      else if (kind === "qr2") setCfg({ ...cfg, paymentAlt: { ...alt, qrUrl: j.url } });
       else setCfg({ ...cfg, logoUrl: j.url });
       router.refresh();
     }
   };
+  const alt = cfg.paymentAlt ?? { bankName: "Maya", accountName: cfg.payment.accountName, accountNumber: "", qrUrl: "" };
   const set = <K extends keyof SiteConfig>(k: K, v: SiteConfig[K]) => setCfg({ ...cfg, [k]: v });
   const saveConfig = () => {
-    const { courtName, tagline, locationText, mapsUrl, contactNumber, emailAddress, facebookPage, openingHoursText, bookingWindowDays, bookingFee, bookingFeePerHour, paymentWindowMinutes, partialPaymentEnabled, partialPaymentPercent, emailSendingEnabled, adminEmail, showRateSeparators, payment, courtDetails, policies, faqs, gallery } = cfg;
-    post({ op: "config", config: { courtName, tagline, locationText, mapsUrl, contactNumber, emailAddress, facebookPage, openingHoursText, bookingWindowDays, bookingFee, bookingFeePerHour, paymentWindowMinutes, partialPaymentEnabled, partialPaymentPercent, emailSendingEnabled, adminEmail, showRateSeparators, payment, courtDetails, policies, faqs, gallery } });
+    const { courtName, tagline, locationText, mapsUrl, contactNumber, emailAddress, facebookPage, openingHoursText, bookingWindowDays, bookingFee, bookingFeePerHour, paymentWindowMinutes, partialPaymentEnabled, partialPaymentPercent, emailSendingEnabled, adminEmail, showRateSeparators, payment, paymentAlt, courtDetails, policies, faqs, gallery } = cfg;
+    post({ op: "config", config: { courtName, tagline, locationText, mapsUrl, contactNumber, emailAddress, facebookPage, openingHoursText, bookingWindowDays, bookingFee, bookingFeePerHour, paymentWindowMinutes, partialPaymentEnabled, partialPaymentPercent, emailSendingEnabled, adminEmail, showRateSeparators, payment, paymentAlt, courtDetails, policies, faqs, gallery } });
   };
 
   return (
@@ -119,6 +121,32 @@ export default function SettingsForm({ cfg: initial, courts: initialCourts, band
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={cfg.payment.qrUrl} alt="" style={{ width: 80, height: 80, borderRadius: 8, background: "#fff", border: "1px solid var(--ck-line)" }} />
             <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && upload("qr", e.target.files[0])} />
+          </div>
+        </div>
+        <h3 style={{ fontSize: 14, margin: "16px 0 6px" }}>Second option (shown as a tab at checkout)</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" }}>
+          {(["bankName", "accountName", "accountNumber"] as const).map((k) => (
+            <div className="field" key={k}>
+              <label>{k === "bankName" ? "Wallet (e.g. Maya)" : k === "accountName" ? "Account name" : "Account number (optional)"}</label>
+              <input value={alt[k]} onChange={(e) => set("paymentAlt", { ...alt, [k]: e.target.value })} />
+            </div>
+          ))}
+        </div>
+        <div className="field">
+          <label>Second QR image</label>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            {alt.qrUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={alt.qrUrl} alt="" style={{ width: 80, height: 80, objectFit: "contain", borderRadius: 8, background: "#fff", border: "1px solid var(--ck-line)" }} />
+            ) : (
+              <span className="muted">None — only the first option is shown</span>
+            )}
+            <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && upload("qr2", e.target.files[0])} />
+            {alt.qrUrl && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => set("paymentAlt", { ...alt, qrUrl: "" })}>
+                Remove
+              </button>
+            )}
           </div>
         </div>
       </section>
