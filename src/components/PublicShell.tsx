@@ -19,7 +19,7 @@ export default function PublicShell({ cfg, children }: { cfg: SiteConfig; childr
       <main className="container" style={{ paddingTop: 22 }}>
         {children}
       </main>
-      <Footer name={cfg.courtName} />
+      <Footer name={cfg.courtName} facebook={cfg.facebookPage} motto={cfg.motto} />
       {track && (
         <div className="overlay" onClick={() => setTrack(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

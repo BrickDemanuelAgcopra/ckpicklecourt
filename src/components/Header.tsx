@@ -10,12 +10,15 @@ export const NAV = [
   { id: "facilities", label: "Facilities" },
   { id: "open-play", label: "Open Play" },
   { id: "location", label: "Location" },
+  { id: "policies", label: "Rules" },
   { id: "faq", label: "FAQ" },
 ];
 
 export function scrollToId(id: string): boolean {
   const el = document.getElementById(id);
   if (!el) return false;
+  // lets the Court Information accordion expand the section being jumped to
+  window.dispatchEvent(new CustomEvent("ck:section", { detail: id }));
   el.scrollIntoView({ behavior: "smooth", block: "start" });
   return true;
 }
@@ -72,9 +75,15 @@ export default function Header({ name, logoUrl, onTrack }: { name: string; logoU
   );
 }
 
-export function Footer({ name }: { name: string }) {
+export function Footer({ name, facebook, motto }: { name: string; facebook?: string; motto?: string }) {
   return (
     <footer className="site-footer">
+      {motto && <div className="footer-motto">{motto}</div>}
+      {facebook && (
+        <a className="footer-fb" href={facebook} target="_blank" rel="noreferrer">
+          Follow us on Facebook
+        </a>
+      )}
       <span>© {new Date().getFullYear()} {name} Booking System</span>
       <span className="ver">v1.0.0</span>
     </footer>

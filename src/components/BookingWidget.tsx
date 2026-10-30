@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ic } from "./Icons";
+import { scrollToId } from "./Header";
 import { money } from "@/lib/format";
 import { addDaysISO, hourParts, longDate, monthRangeLabel, rangeLabel, shortDay } from "@/lib/time";
 import type { DayGrid, Equipment, GridCell, SiteConfig } from "@/lib/types";
@@ -178,6 +179,19 @@ export default function BookingWidget({ cfg, today, initial, equipment }: { cfg:
               Clear
             </button>
           </div>
+          {!!cfg.quickRules?.length && (
+            <div className="quick-rules">
+              <h4>Good to know</h4>
+              <ul>
+                {cfg.quickRules.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+              <a href="#policies" onClick={(e) => { if (scrollToId("policies")) e.preventDefault(); }}>
+                Read the full court rules
+              </a>
+            </div>
+          )}
         </aside>
       </section>
 
@@ -401,7 +415,11 @@ function DetailsFlow({ cfg, date, sel, courts, equipment, fee, step, setStep, lo
             <input id="phone" name="phone" type="tel" placeholder="0917..." value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
           </div>
           <p className="consent">
-            By submitting this booking, you consent to the collection and use of your information as described in our{" "}
+            By submitting this booking, you agree to our{" "}
+            <a href="/#policies" target="_blank">
+              Court Rules &amp; Policies
+            </a>{" "}
+            and consent to the collection and use of your information as described in our{" "}
             <a href="/privacy" target="_blank">
               Privacy Policy
             </a>

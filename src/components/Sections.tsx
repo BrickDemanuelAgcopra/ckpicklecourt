@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Ic } from "./Icons";
 import { money } from "@/lib/format";
 import { rangeLabel } from "@/lib/time";
@@ -14,11 +14,12 @@ export function Rates({ bands, sym }: { bands: RateBand[]; sym: string }) {
       {bands.map((b) => (
         <div className="rate-row" key={b.id}>
           <b>
+            {b.name && <small className="band-name">{b.name}</small>}
             {rangeLabel(b.start_hour, b.end_hour)}
             {b.days?.length ? <small>{b.days.map((d) => DOW[d]).join(", ")}</small> : null}
           </b>
           <div style={{ textAlign: "right" }}>
-            <small>All courts</small>
+            <small>Per court</small>
             <strong>{money(b.price, sym)}/hr</strong>
           </div>
         </div>
@@ -37,9 +38,13 @@ export function CourtInfo({ cfg, bands, equipment }: { cfg: SiteConfig; bands: R
       body: (
         <>
           <p>{cfg.openingHoursText.replace(/^Open /, "We are open ")}.</p>
-          <p>
-            <strong>All courts</strong>: {bands.map((b) => `${money(b.price, sym)}/hr (${rangeLabel(b.start_hour, b.end_hour)})`).join(" · ")}
-          </p>
+          <ul>
+            {bands.map((b) => (
+              <li key={b.id}>
+                <strong>{b.name}</strong> ({rangeLabel(b.start_hour, b.end_hour)}): {money(b.price, sym)}/hr per court
+              </li>
+            ))}
+          </ul>
           {equipment.length > 0 && (
             <>
               <p>
@@ -61,13 +66,22 @@ export function CourtInfo({ cfg, bands, equipment }: { cfg: SiteConfig; bands: R
       title: "2. Location",
       id: "location",
       body: (
-        <p>
-          We are located at: {cfg.locationText}.{" "}
-          <a href={cfg.mapsUrl} target="_blank" rel="noreferrer">
-            View on Google Maps
-          </a>
-          .
-        </p>
+        <>
+          <p>You'll find us at {cfg.locationText}.</p>
+          <p>
+            <a href={cfg.mapsUrl} target="_blank" rel="noreferrer">
+              Get directions on Google Maps
+            </a>
+            {cfg.facebookPage && (
+              <>
+                {" · "}
+                <a href={cfg.facebookPage} target="_blank" rel="noreferrer">
+                  Message us on Facebook
+                </a>
+              </>
+            )}
+          </p>
+        </>
       ),
     },
     {
@@ -85,20 +99,42 @@ export function CourtInfo({ cfg, bands, equipment }: { cfg: SiteConfig; bands: R
       ),
     },
     {
-      title: "4. Reminders/Policies",
+      title: "4. Court Rules & Policies",
       id: "policies",
       body: (
         <>
-          {cfg.policies.map((p) => (
-            <div key={p.id}>
-              <h5>{p.title}</h5>
-              <p style={{ whiteSpace: "pre-line" }}>{p.text}</p>
-            </div>
-          ))}
+          <ol className="rules">
+            {cfg.policies.map((p) => (
+              <li key={p.id}>
+                <h5>{p.title}</h5>
+                <RichText text={p.text} />
+              </li>
+            ))}
+          </ol>
+          {cfg.motto && <p className="motto">{cfg.motto}</p>}
         </>
       ),
     },
   ];
+
+  // Expand the section a nav link or /#hash points at.
+  useEffect(() => {
+    const ids = items.map((it) => it.id);
+    const openId = (id: string) => {
+      const i = ids.indexOf(id);
+      if (i >= 0) setOpen(i);
+    };
+    const onSection = (e: Event) => openId((e as CustomEvent<string>).detail);
+    if (location.hash) {
+      openId(location.hash.slice(1));
+      const el = document.getElementById(location.hash.slice(1));
+      if (el) setTimeout(() => el.scrollIntoView({ block: "start" }), 50);
+    }
+    window.addEventListener("ck:section", onSection);
+    return () => window.removeEventListener("ck:section", onSection);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <section className="info" id="info">
       <h2>Court Information</h2>
@@ -123,6 +159,26 @@ export function CourtInfo({ cfg, bands, equipment }: { cfg: SiteConfig; bands: R
       )}
     </section>
   );
+}
+
+/** Plain text where lines starting with "• " become a bullet list. */
+function RichText({ text }: { text: string }) {
+  const blocks: React.ReactNode[] = [];
+  let bullets: string[] = [];
+  const flush = () => {
+    if (bullets.length) blocks.push(<ul key={blocks.length}>{bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>);
+    bullets = [];
+  };
+  for (const line of text.split("\n")) {
+    const m = line.match(/^\s*[•\-]\s+(.*)$/);
+    if (m) bullets.push(m[1]);
+    else {
+      flush();
+      if (line.trim()) blocks.push(<p key={blocks.length}>{line}</p>);
+    }
+  }
+  flush();
+  return <>{blocks}</>;
 }
 
 function FaqItem({ q, a }: { q: string; a: string }) {

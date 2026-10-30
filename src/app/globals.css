@@ -295,6 +295,26 @@ input, select, textarea { font: inherit; }
 .admin-grid .slot { height: 34px; font-size: 10px; }
 .note { background: var(--ck-gold-bg); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px; }
 
+/* Rules, reminders, motto */
+.rate-row .band-name { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ck-gold-text); font-weight: 700; margin-bottom: 1px; }
+.quick-rules { margin-top: 14px; border: 1px solid #e3d4a6; background: var(--ck-gold-bg); border-radius: 16px; padding: 14px 16px; font-size: 13px; }
+.quick-rules h4 { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ck-gold-text); margin-bottom: 6px; }
+.quick-rules ul { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 5px; }
+.quick-rules li { position: relative; padding-left: 20px; color: var(--ck-ink); }
+.quick-rules li::before { content: "✓"; position: absolute; left: 0; color: var(--ck-green-mid); font-weight: 800; }
+.quick-rules a { font-weight: 600; font-size: 12.5px; }
+.rules { list-style: none; counter-reset: rule; padding: 0; margin: 4px 0 0; }
+.rules > li { counter-increment: rule; padding: 10px 0; border-bottom: 1px solid var(--ck-line-2); }
+.rules > li:last-child { border-bottom: 0; }
+.rules h5 { font-weight: 700; display: flex; align-items: center; gap: 8px; margin: 0 0 4px !important; }
+.rules h5::before { content: counter(rule); flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--ck-green); color: var(--ck-gold); font-size: 11px; display: grid; place-items: center; }
+.rules ul { list-style: disc; margin: 2px 0 0 !important; padding-left: 48px !important; }
+.rules p { margin: 4px 0 2px 30px !important; }
+.rules li li { margin: 3px 0; }
+.motto { margin: 14px 0 2px !important; text-align: center; font-family: var(--font-display); font-weight: 800; letter-spacing: .02em; color: var(--ck-green); background: var(--ck-gold-bg); border-radius: 12px; padding: 12px; }
+.footer-motto { width: 100%; text-align: center; font-weight: 700; color: var(--ck-green); letter-spacing: .02em; }
+.footer-fb { font-weight: 600; }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 /* Grid/flex children default to min-width:auto, which let the booking grid and
    date strip push the whole page wider than the phone screen. */

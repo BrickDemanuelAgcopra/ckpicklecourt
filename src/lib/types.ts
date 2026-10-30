@@ -28,6 +28,9 @@ export type SiteConfig = {
   courtDetails: TitledText[];
   policies: TitledText[];
   faqs: Faq[];
+  /** Short reminders shown beside the booking summary. */
+  quickRules?: string[];
+  motto?: string;
   slotColors: Record<string, { background?: string; text?: string }>;
   showRateSeparators: boolean;
 };
