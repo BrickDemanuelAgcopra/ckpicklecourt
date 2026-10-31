@@ -50,6 +50,8 @@ export async function setBookingStatus(actor: string, id: string, action: "confi
   const fresh = (await getBooking(id))!;
   if (action === "confirm" || action === "confirm_partial") sendBookingEmail("confirmed", fresh).catch(() => {});
   if (action === "decline") sendBookingEmail("declined", fresh).catch(() => {});
+  // the hours are already released, so tell the guest which ones from the booking as it was
+  if (action === "cancel") sendBookingEmail("cancelled", { ...b, status: "cancelled" }).catch(() => {});
   return fresh;
 }
 
@@ -85,7 +87,7 @@ export async function setSlotOverride(actor: string, courtId: number, date: stri
 export type PaymentInput = { amount: number; method: PaymentMethod; reference?: string; note?: string };
 
 /** Records money received and moves the booking along: fully paid → confirmed, anything less → balance due. */
-export async function recordPayment(actor: string, id: string, p: PaymentInput): Promise<BookingDetail> {
+export async function recordPayment(actor: string, id: string, p: PaymentInput, opts: { quiet?: boolean } = {}): Promise<BookingDetail> {
   const b = await getBooking(id);
   if (!b) throw new BookingError("Booking not found", "not_found");
   if (!["awaiting_payment", "pending", "balance_due", "confirmed"].includes(b.status)) throw new BookingError(`Cannot record a payment on a booking that is ${b.status}`, "state");
@@ -109,7 +111,9 @@ export async function recordPayment(actor: string, id: string, p: PaymentInput):
   );
   await audit(actor, "payment_recorded", "booking", id, { confirmationId: b.confirmation_id, amount: p.amount, method: p.method, reference: p.reference, from: b.status, to: next });
   const fresh = (await getBooking(id))!;
+  if (opts.quiet) return fresh;
   if (b.status === "awaiting_payment" || b.status === "pending") sendBookingEmail("confirmed", fresh).catch(() => {});
+  else sendBookingEmail("payment", fresh, { amount: p.amount, method: p.method }).catch(() => {});
   return fresh;
 }
 
@@ -122,7 +126,7 @@ export async function createAdminBooking(actor: string, input: NewBookingInput, 
   );
   const b = (await getBooking(id))!;
   await audit(actor, "booking_created_admin", "booking", id, { confirmationId: b.confirmation_id, total: b.total });
-  if (payment && payment.amount > 0) await recordPayment(actor, id, payment);
+  if (payment && payment.amount > 0) await recordPayment(actor, id, payment, { quiet: true }); // one confirmation email below covers it
   else if (Number(b.total) <= 0) await query("UPDATE bookings SET status='confirmed' WHERE id=$1", [id]);
   const fresh = (await getBooking(id))!;
   sendBookingEmail("confirmed", fresh).catch(() => {});

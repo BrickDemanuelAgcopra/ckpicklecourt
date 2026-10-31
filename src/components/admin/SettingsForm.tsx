@@ -101,7 +101,7 @@ export default function SettingsForm({ cfg: initial, courts: initialCourts, band
         </div>
         <Check cfg={cfg} set={set} k="bookingFeePerHour" label="Charge processing fee per court per hour (instead of per reservation)" />
         <Check cfg={cfg} set={set} k="partialPaymentEnabled" label="Allow guests to pay a partial amount and settle the balance at the court" />
-        <Check cfg={cfg} set={set} k="emailSendingEnabled" label="Send confirmation emails (needs SMTP settings in .env)" />
+        <Check cfg={cfg} set={set} k="emailSendingEnabled" label="Send booking emails: receipts received, confirmations, payments, cancellations, day-before reminders, and a 7 AM daily summary to the admin notification email (needs SMTP settings in .env)" />
         <Check cfg={cfg} set={set} k="showRateSeparators" label="Show rate-band separators in the grid" />
       </section>
 
