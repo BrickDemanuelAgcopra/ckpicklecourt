@@ -3,7 +3,8 @@ import { clearSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+export async function POST() {
   await clearSession();
-  return NextResponse.redirect(new URL("/admin/login", req.url), 303);
+  // Relative Location: req.url is the internal 0.0.0.0:3000 address behind the proxy
+  return new NextResponse(null, { status: 303, headers: { Location: "/" } });
 }
