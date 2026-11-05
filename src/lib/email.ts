@@ -47,7 +47,7 @@ export async function sendMail(to: string | string[], subject: string, text: str
 const METHOD: Record<PaymentMethod, string> = { gcash: "GCash", maya: "Maya", cash: "Cash", bank: "Bank transfer", other: "Other" };
 
 /** Back-to-back hours on the same court and day merged into one entry. */
-function scheduleBlocks(b: BookingDetail): { court: string; date: string; time: string }[] {
+export function scheduleBlocks(b: BookingDetail): { court: string; date: string; time: string }[] {
   const out: { court: string; date: string; time: string }[] = [];
   const slots = [...b.slots].sort((x, y) => x.date.localeCompare(y.date) || x.court_name.localeCompare(y.court_name) || x.hour - y.hour);
   for (let i = 0; i < slots.length; ) {

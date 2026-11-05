@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { BookingError, getBooking, submitReceipt } from "@/lib/bookings";
 import { readUpload, saveUpload } from "@/lib/storage";
 import { sendBookingEmail } from "@/lib/email";
+import { notifyTelegramNewBooking } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const rel = await saveUpload(`receipts/${id.slice(0, 2)}`, file);
     const b = await submitReceipt(id, rel, partial);
     sendBookingEmail("submitted", b).catch(() => {});
+    notifyTelegramNewBooking(b).catch(() => {});
     return NextResponse.json({ ok: true, confirmationId: b.confirmation_id });
   } catch (e) {
     if (e instanceof BookingError) return NextResponse.json({ error: e.message, code: e.code }, { status: 400 });
