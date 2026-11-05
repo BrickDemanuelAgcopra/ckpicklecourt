@@ -21,6 +21,9 @@ export type BookingEmailView = {
   payments: { date: string; method: string; reference: string; amount: string }[];
   location?: { text: string; mapsUrl: string };
   cta?: { label: string; url: string };
+  secondaryCta?: { label: string; url: string };
+  scheduleTitle?: string; // defaults to "Your court time(s)"
+  footerNote?: string; // replaces the default "You're receiving this because…" line
   courtName: string;
   tagline: string;
   logoUrl: string;
@@ -206,7 +209,7 @@ export function renderBookingEmailHtml(v: BookingEmailView): string {
 
       ${receipt}
 
-      ${sectionTitle(v.schedule.length > 1 ? "Your court times" : "Your court time")}
+      ${sectionTitle(v.scheduleTitle ?? (v.schedule.length > 1 ? "Your court times" : "Your court time"))}
       ${schedule}
 
       ${equipment}
@@ -218,19 +221,20 @@ export function renderBookingEmailHtml(v: BookingEmailView): string {
       ${location}
 
       ${v.cta ? `<tr><td style="padding:32px 0 8px;">${button(v.cta.label, v.cta.url)}</td></tr>` : ""}
+      ${v.secondaryCta ? `<tr><td style="padding:4px 0 8px;">${button(v.secondaryCta.label, v.secondaryCta.url, "outline")}</td></tr>` : ""}
     </table>
   </td></tr>
 
   <!-- footer -->
-  <tr><td bgcolor="${C.surface}" style="background:${C.surface};border-radius:0 0 18px 18px;padding:16px 32px 28px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr><td bgcolor="${C.surface}" style="background:${C.surface};border-radius:0 0 18px 18px;padding:${contactBits.length ? "16px 32px 28px" : "0 32px 24px"};">
+    ${contactBits.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr><td style="border-top:1px solid ${C.line};padding-top:18px;font:400 13px/1.6 ${FONT};color:${C.inkFaint};" align="center">
-        ${contactBits.length ? `Questions? Message us<br>${contactBits.join(" &nbsp;·&nbsp; ")}` : ""}
+        Questions? Message us<br>${contactBits.join(" &nbsp;·&nbsp; ")}
       </td></tr>
-    </table>
+    </table>` : ""}
   </td></tr>
   <tr><td align="center" style="padding:18px 24px 0;font:400 12px/1.6 ${FONT};color:${C.inkFaint};">
-    You're receiving this because you booked a court at ${esc(v.courtName)}.<br>
+    ${esc(v.footerNote ?? `You're receiving this because you booked a court at ${v.courtName}.`)}<br>
     <a href="${esc(v.siteUrl)}" style="color:${C.inkFaint};">${esc(v.siteUrl.replace(/^https?:\/\//, ""))}</a>
   </td></tr>
 

@@ -1,4 +1,6 @@
 import nodemailer from "nodemailer";
+import { extname } from "node:path";
+import { readUpload } from "./storage";
 import { getConfig } from "./config";
 import { hourLabel, longDate } from "./time";
 import { money } from "./format";
@@ -25,14 +27,16 @@ export async function emailEnabled(): Promise<boolean> {
   return Boolean(process.env.SMTP_HOST) && (await getConfig()).emailSendingEnabled;
 }
 
-/** Sends one email (plain text, plus an HTML version when given). Returns false when email is off or sending failed. */
-export async function sendMail(to: string | string[], subject: string, text: string, html?: string): Promise<boolean> {
+type MailExtras = { html?: string; replyTo?: string; attachments?: { filename: string; content: Buffer; contentType: string }[] };
+
+/** Sends one email (plain text, plus HTML/attachments when given). Returns false when email is off or sending failed. */
+export async function sendMail(to: string | string[], subject: string, text: string, extras: MailExtras = {}): Promise<boolean> {
   const cfg = await getConfig();
   const t = transport();
   const list = (Array.isArray(to) ? to : [to]).filter(Boolean);
   if (!t || !cfg.emailSendingEnabled || !list.length) return false;
   try {
-    await t.sendMail({ from: process.env.SMTP_FROM || `${cfg.courtName} <no-reply@ckpicklecourt.com>`, to: list, subject, text, ...(html ? { html } : {}) });
+    await t.sendMail({ from: process.env.SMTP_FROM || `${cfg.courtName} <no-reply@ckpicklecourt.com>`, to: list, subject, text, ...extras });
     return true;
   } catch (e) {
     console.error("email failed", e);
@@ -198,13 +202,60 @@ export async function renderBookingEmail(kind: BookingEmailKind, b: BookingDetai
   return { subject: v.subject, text: plainText(v), html: renderBookingEmailHtml(v) };
 }
 
-/** Guest emails about one booking ("submitted" also alerts the admin). Silently skips when email is off. */
+/** The owner's "new booking to review" alert: guest contact details, the receipt attached, and a link into Admin. */
+export function renderAdminNewBookingEmail(b: BookingDetail, cfg: SiteConfig) {
+  const v = buildView("submitted", b, cfg);
+  const m = (n: number | string) => money(n, cfg.currencySymbol);
+  const total = Number(b.total);
+  const expected = b.partial_payment && b.partial_percent ? Math.round((total * b.partial_percent) / 100) : total;
+  const slotCount = b.slots.length;
+  const guest: EmailRow[] = [
+    { label: "Name", value: b.guest_name },
+    { label: "Phone", value: b.guest_phone || "—" },
+    { label: "Email", value: b.guest_email || "—" },
+    { label: "Paying now", value: b.partial_payment && b.partial_percent ? `${b.partial_percent}% deposit` : "Full amount" },
+    { label: "Amount to check on receipt", value: m(expected), strong: true, tone: "gold" },
+  ];
+  const adminUrl = `${siteUrl()}/admin/bookings?view=review&q=${encodeURIComponent(b.confirmation_id)}`;
+  const view: BookingEmailView = {
+    ...v,
+    preheader: `${b.guest_name} · ${slotCount} ${slotCount === 1 ? "hour" : "hours"} · ${m(total)} · receipt attached`,
+    badge: "New booking",
+    tone: "gold",
+    heading: "New booking to review",
+    greeting: "Hi,",
+    intro: [`${b.guest_name} just booked and uploaded a payment receipt. Check that the payment arrived, then confirm or decline the booking in Admin.`],
+    receipt: { title: "Guest details", rows: guest },
+    scheduleTitle: v.schedule.length > 1 ? "Court times" : "Court time",
+    payments: [],
+    settlement: [],
+    location: undefined,
+    cta: { label: "Review in Admin", url: adminUrl },
+    secondaryCta: b.receipt_path ? { label: "View receipt", url: `${siteUrl()}/api/bookings/${b.id}/receipt` } : undefined,
+    contact: { phone: "", email: "", facebook: "" },
+    footerNote: `You're receiving this as the admin of ${cfg.courtName}. Change the alert address in Admin → Settings.`,
+  };
+  const subject = `New booking ${b.confirmation_id} from ${b.guest_name} (${m(total)})`;
+  return { subject, text: plainText(view), html: renderBookingEmailHtml(view) };
+}
+
+async function sendAdminNewBookingEmail(b: BookingDetail, cfg: SiteConfig): Promise<boolean> {
+  if (!cfg.adminEmail) return false;
+  const { subject, text, html } = renderAdminNewBookingEmail(b, cfg);
+  const attachments: MailExtras["attachments"] = [];
+  const f = b.receipt_path ? await readUpload(b.receipt_path).catch(() => null) : null;
+  if (f) attachments.push({ filename: `receipt-${b.confirmation_id}${extname(b.receipt_path!) || ""}`, content: f.buf, contentType: f.type });
+  return sendMail(cfg.adminEmail, subject, text, { html, attachments, ...(b.guest_email ? { replyTo: b.guest_email } : {}) });
+}
+
+/** Guest emails about one booking. "submitted" also sends the owner a separate alert. Silently skips when email is off. */
 export async function sendBookingEmail(kind: BookingEmailKind, b: BookingDetail, payment?: Payment): Promise<boolean> {
   const cfg = await getConfig();
   const { subject, text, html } = await renderBookingEmail(kind, b, payment, cfg);
-  const to: string[] = [];
-  if (b.guest_email) to.push(b.guest_email);
-  if (kind === "submitted" && cfg.adminEmail) to.push(cfg.adminEmail);
-  return sendMail(to, subject, text, html);
+  const [guestSent] = await Promise.all([
+    b.guest_email ? sendMail(b.guest_email, subject, text, { html }) : Promise.resolve(false),
+    kind === "submitted" ? sendAdminNewBookingEmail(b, cfg) : Promise.resolve(false),
+  ]);
+  return guestSent;
 }
 
