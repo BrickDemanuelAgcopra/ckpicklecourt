@@ -40,6 +40,12 @@ const config = {
     accountNumber: "",
     qrUrl: "/brand/maya-qr.jpg",
   },
+  paymentAlt2: {
+    bankName: "GoTyme",
+    accountName: "Chateau Katriannah Pickleball Club",
+    accountNumber: "",
+    qrUrl: "/brand/gotyme-qr.jpg",
+  },
   gallery: ["/images/hero.jpg", "/images/court-2.jpg", "/images/court-3.jpg", "/images/court-4.jpg", "/images/court-5.jpg"],
   slotColors: {},
   showRateSeparators: true,

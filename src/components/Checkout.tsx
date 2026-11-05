@@ -17,7 +17,7 @@ export default function Checkout({ cfg, booking }: { cfg: SiteConfig; booking: B
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [qrFull, setQrFull] = useState(false);
-  const wallets = [cfg.payment, ...(cfg.paymentAlt?.qrUrl ? [cfg.paymentAlt] : [])];
+  const wallets = [cfg.payment, ...[cfg.paymentAlt, cfg.paymentAlt2].filter((w): w is NonNullable<typeof w> => Boolean(w?.qrUrl))];
   const [walletIdx, setWalletIdx] = useState(0);
   const wallet = wallets[walletIdx] ?? cfg.payment;
   const fileRef = useRef<HTMLInputElement>(null);

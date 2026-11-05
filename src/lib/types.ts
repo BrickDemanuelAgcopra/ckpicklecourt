@@ -27,6 +27,8 @@ export type SiteConfig = {
   payment: PaymentAccount;
   /** Optional second wallet shown as a tab at checkout (e.g. Maya). Hidden when it has no QR. */
   paymentAlt?: PaymentAccount;
+  /** Optional third wallet tab (e.g. GoTyme). Hidden when it has no QR. */
+  paymentAlt2?: PaymentAccount;
   gallery: string[];
   heroFacts: HeroFact[];
   courtDetails: TitledText[];
@@ -97,7 +99,7 @@ export type BookingRow = {
 export type BookingSlotRow = { court_id: number; court_name: string; date: string; hour: number; price: string };
 export type BookingEquipmentRow = { equipment_id: number; name: string; unit: string; qty: number; unit_price: string };
 
-export type PaymentMethod = "gcash" | "maya" | "cash" | "bank" | "other";
+export type PaymentMethod = "gcash" | "maya" | "gotyme" | "cash" | "bank" | "other";
 export type PaymentRow = { id: number; amount: string; method: PaymentMethod; reference: string | null; note: string | null; received_at: string; recorded_by: string };
 
 export type BookingDetail = BookingRow & { slots: BookingSlotRow[]; equipment: BookingEquipmentRow[]; payments: PaymentRow[]; paid: number };

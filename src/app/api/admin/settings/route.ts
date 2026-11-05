@@ -30,6 +30,7 @@ const ConfigPatch = z.object({
   showRateSeparators: z.boolean(),
   payment: z.object({ bankName: z.string().max(60), accountName: z.string().max(100), accountNumber: z.string().max(60), qrUrl: z.string().max(300) }),
   paymentAlt: z.object({ bankName: z.string().max(60), accountName: z.string().max(100), accountNumber: z.string().max(60), qrUrl: z.string().max(300) }).optional(),
+  paymentAlt2: z.object({ bankName: z.string().max(60), accountName: z.string().max(100), accountNumber: z.string().max(60), qrUrl: z.string().max(300) }).optional(),
   courtDetails: Titled,
   policies: Titled,
   faqs: z.array(z.object({ q: z.string(), a: z.string() })),
@@ -52,12 +53,13 @@ export async function POST(req: Request) {
     const fd = await req.formData();
     const kind = String(fd.get("kind") || "");
     const file = fd.get("file");
-    if (!(file instanceof File) || !["qr", "qr2", "logo"].includes(kind)) return NextResponse.json({ error: "bad upload" }, { status: 400 });
+    if (!(file instanceof File) || !["qr", "qr2", "qr3", "logo"].includes(kind)) return NextResponse.json({ error: "bad upload" }, { status: 400 });
     try {
       const rel = await saveUpload("public", file);
       const cfg = await getConfig();
       if (kind === "qr") cfg.payment.qrUrl = `/api/files/${rel}`;
       else if (kind === "qr2") cfg.paymentAlt = { bankName: "Maya", accountName: cfg.payment.accountName, accountNumber: "", ...cfg.paymentAlt, qrUrl: `/api/files/${rel}` };
+      else if (kind === "qr3") cfg.paymentAlt2 = { bankName: "GoTyme", accountName: cfg.payment.accountName, accountNumber: "", ...cfg.paymentAlt2, qrUrl: `/api/files/${rel}` };
       else cfg.logoUrl = `/api/files/${rel}`;
       await saveConfig(cfg);
       await audit(s.email, "settings_updated", "config", kind, { file: rel });
