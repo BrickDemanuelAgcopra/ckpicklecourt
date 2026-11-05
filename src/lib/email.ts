@@ -3,6 +3,7 @@ import { getConfig } from "./config";
 import { hourLabel, longDate } from "./time";
 import { money } from "./format";
 import type { BookingDetail, PaymentMethod, SiteConfig } from "./types";
+import { renderBookingEmailHtml, type BookingEmailView, type EmailRow, type Tone } from "./emailTemplate";
 
 function transport() {
   const host = process.env.SMTP_HOST;
@@ -24,14 +25,14 @@ export async function emailEnabled(): Promise<boolean> {
   return Boolean(process.env.SMTP_HOST) && (await getConfig()).emailSendingEnabled;
 }
 
-/** Sends one plain-text email. Returns false when email is off or sending failed. */
-export async function sendMail(to: string | string[], subject: string, text: string): Promise<boolean> {
+/** Sends one email (plain text, plus an HTML version when given). Returns false when email is off or sending failed. */
+export async function sendMail(to: string | string[], subject: string, text: string, html?: string): Promise<boolean> {
   const cfg = await getConfig();
   const t = transport();
   const list = (Array.isArray(to) ? to : [to]).filter(Boolean);
   if (!t || !cfg.emailSendingEnabled || !list.length) return false;
   try {
-    await t.sendMail({ from: process.env.SMTP_FROM || `${cfg.courtName} <no-reply@ckpicklecourt.com>`, to: list, subject, text });
+    await t.sendMail({ from: process.env.SMTP_FROM || `${cfg.courtName} <no-reply@ckpicklecourt.com>`, to: list, subject, text, ...(html ? { html } : {}) });
     return true;
   } catch (e) {
     console.error("email failed", e);
@@ -39,43 +40,52 @@ export async function sendMail(to: string | string[], subject: string, text: str
   }
 }
 
-const METHOD: Record<PaymentMethod, string> = { gcash: "GCash", maya: "Maya", cash: "cash", bank: "bank transfer", other: "other" };
+const METHOD: Record<PaymentMethod, string> = { gcash: "GCash", maya: "Maya", cash: "Cash", bank: "Bank transfer", other: "Other" };
 
-/** "Court 1: Saturday, October 31, 2026 6:00 PM – 8:00 PM", back-to-back hours merged into one line. */
-function slotLines(b: BookingDetail): string {
-  const lines: string[] = [];
+/** Back-to-back hours on the same court and day merged into one entry. */
+function scheduleBlocks(b: BookingDetail): { court: string; date: string; time: string }[] {
+  const out: { court: string; date: string; time: string }[] = [];
   const slots = [...b.slots].sort((x, y) => x.date.localeCompare(y.date) || x.court_name.localeCompare(y.court_name) || x.hour - y.hour);
   for (let i = 0; i < slots.length; ) {
     const s = slots[i];
     let end = s.hour + 1;
     let j = i + 1;
     while (j < slots.length && slots[j].date === s.date && slots[j].court_id === s.court_id && slots[j].hour === end) end = slots[j++].hour + 1;
-    lines.push(`${s.court_name}: ${longDate(s.date)} ${hourLabel(s.hour)} – ${hourLabel(end)}`);
+    const hrs = end - s.hour;
+    out.push({ court: s.court_name, date: longDate(s.date), time: `${hourLabel(s.hour)} – ${hourLabel(end)} (${hrs} ${hrs === 1 ? "hour" : "hours"})` });
     i = j;
   }
-  return lines.join("\n");
+  return out;
 }
 
-function moneyLines(b: BookingDetail, cfg: SiteConfig): string {
-  const sym = cfg.currencySymbol;
-  const due = Math.max(Number(b.total) - b.paid, 0);
-  let s = `Total: ${money(b.total, sym)}`;
-  if (b.paid > 0) s += `\nPaid: ${money(b.paid, sym)}` + (due > 0 ? `\nBalance to pay at the court: ${money(due, sym)}` : " (fully paid)");
-  return s;
+function stamp(ts: string): string {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(new Date(ts));
 }
 
-function contactLine(cfg: SiteConfig): string {
-  const ways = [cfg.contactNumber, cfg.facebookPage].filter(Boolean);
-  return ways.length ? `Questions? Message us: ${ways.join(" · ")}\n\n` : "";
+function absUrl(u: string): string {
+  return /^https?:\/\//i.test(u) ? u : `${siteUrl()}${u.startsWith("/") ? "" : "/"}${u}`;
 }
 
 export type BookingEmailKind = "submitted" | "confirmed" | "declined" | "cancelled" | "payment" | "reminder";
 
-/** Guest emails about one booking ("submitted" also alerts the admin). Silently skips when email is off. */
-export async function sendBookingEmail(kind: BookingEmailKind, b: BookingDetail, payment?: { amount: number; method: PaymentMethod }): Promise<boolean> {
-  const cfg = await getConfig();
-  const sym = cfg.currencySymbol;
-  const tracking = `${siteUrl()}/bookings/${b.id}`;
+const LOOK: Record<BookingEmailKind, { badge: string; tone: Tone; heading: string }> = {
+  submitted: { badge: "Booking received", tone: "gold", heading: "We got your booking" },
+  confirmed: { badge: "Confirmed", tone: "green", heading: "You're all set!" },
+  declined: { badge: "Not approved", tone: "red", heading: "We couldn't confirm your booking" },
+  cancelled: { badge: "Cancelled", tone: "grey", heading: "Your booking was cancelled" },
+  payment: { badge: "Payment received", tone: "green", heading: "Thank you for your payment" },
+  reminder: { badge: "See you tomorrow", tone: "green", heading: "You're playing tomorrow" },
+};
+
+type Payment = { amount: number; method: PaymentMethod };
+
+function buildView(kind: BookingEmailKind, b: BookingDetail, cfg: SiteConfig, payment?: Payment): BookingEmailView & { subject: string } {
+  const m = (n: number | string) => money(n, cfg.currencySymbol);
+  const total = Number(b.total);
+  const due = Math.max(total - b.paid, 0);
+  const live = kind !== "declined" && kind !== "cancelled";
+  const schedule = scheduleBlocks(b);
+
   const subject = {
     submitted: `We received your booking ${b.confirmation_id}`,
     confirmed: `Your booking ${b.confirmation_id} is confirmed`,
@@ -84,25 +94,117 @@ export async function sendBookingEmail(kind: BookingEmailKind, b: BookingDetail,
     payment: `Payment received for booking ${b.confirmation_id}`,
     reminder: `Reminder: you're playing tomorrow at ${cfg.courtName}`,
   }[kind];
-  const intro = {
-    submitted: "Thanks for your booking. We'll review your receipt and confirm shortly.",
-    confirmed: `Your court is confirmed. See you at ${cfg.courtName}!`,
-    declined: "We couldn't verify the payment for this booking, so it was not approved. Please message us if you think this is a mistake.",
-    cancelled: "This booking has been cancelled and its hours released. If you already paid, please message us about your payment.",
-    payment: payment
-      ? `We received ${money(payment.amount, sym)} by ${METHOD[payment.method]}. Thank you!`
-      : "We received your payment. Thank you!",
-    reminder: `See you tomorrow on the court!${cfg.locationText ? `\n\nWhere: ${cfg.locationText}` : ""}${cfg.mapsUrl ? `\nMap: ${cfg.mapsUrl}` : ""}`,
-  }[kind];
-  const body =
-    `Hi ${b.guest_name},\n\n${intro}\n\n` +
-    `Booking reference: ${b.confirmation_id}\n${slotLines(b)}\n${moneyLines(b, cfg)}\n\n` +
-    (kind === "cancelled" ? "" : `Track your booking anytime: ${tracking}\n\n`) +
-    contactLine(cfg) +
-    cfg.courtName;
 
+  const intro = {
+    submitted: ["Thanks for booking with us! We're checking your payment receipt now and will email you as soon as your court is confirmed."],
+    confirmed: [
+      `Your court is confirmed. We can't wait to see you at ${cfg.courtName}!`,
+      ...(due > 0 ? [`Please settle the remaining ${m(due)} at the court before you play.`] : []),
+    ],
+    declined: [
+      "We couldn't verify the payment for this booking, so it was not approved and the hours were released.",
+      "If you think this is a mistake, please message us with your booking reference.",
+    ],
+    cancelled: ["This booking has been cancelled and its hours released.", "If you already paid, please message us about your payment."],
+    payment: [payment ? `We received ${m(payment.amount)} by ${METHOD[payment.method]}. This email is your receipt.` : "We received your payment. This email is your receipt."],
+    reminder: ["Just a friendly reminder that your court is booked for tomorrow. Please arrive a few minutes early to warm up."],
+  }[kind];
+
+  const charges: EmailRow[] = [{ label: "Court fees", value: m(b.subtotal) }];
+  if (Number(b.equipment_total) > 0) charges.push({ label: "Equipment rental", value: m(b.equipment_total) });
+  if (Number(b.booking_fee) > 0) charges.push({ label: "Booking fee", value: m(b.booking_fee) });
+  charges.push({ label: "Total", value: m(total), strong: true });
+
+  const settlement: EmailRow[] = [];
+  if (live && b.paid > 0) {
+    settlement.push({ label: "Paid", value: m(b.paid), tone: "green" });
+    settlement.push(
+      due > 0 ? { label: "Balance to pay at the court", value: m(due), strong: true, tone: "gold" } : { label: "Paid in full", value: "✓", strong: true, tone: "green" }
+    );
+  }
+
+  let receipt: BookingEmailView["receipt"];
+  if (kind === "payment") {
+    const last =
+      [...b.payments].reverse().find((p) => !payment || (Number(p.amount) === Number(payment.amount) && p.method === payment.method)) ?? b.payments.at(-1);
+    const rows: EmailRow[] = [
+      { label: "Amount received", value: m(payment?.amount ?? last?.amount ?? 0) },
+      { label: "Payment method", value: METHOD[payment?.method ?? last?.method ?? "other"] },
+    ];
+    if (last?.reference) rows.push({ label: "Reference no.", value: last.reference });
+    if (last?.received_at) rows.push({ label: "Date received", value: stamp(last.received_at) });
+    rows.push({ label: "Remaining balance", value: m(due), strong: true, tone: due > 0 ? "gold" : "green" });
+    receipt = { title: "Payment receipt", rows };
+  }
+
+  // On a payment email with a single payment, the receipt block already says it all.
+  const showPayments = live && b.payments.length > 0 && !(kind === "payment" && b.payments.length === 1);
+
+  return {
+    subject,
+    preheader: `${LOOK[kind].badge} · Ref ${b.confirmation_id}${schedule.length ? ` · ${schedule[0].date}` : ""}`,
+    ...LOOK[kind],
+    greeting: `Hi ${b.guest_name},`,
+    intro,
+    reference: b.confirmation_id,
+    schedule,
+    equipment: b.equipment.map((e) => ({
+      name: e.name,
+      detail: `${e.qty} × ${m(e.unit_price)}${e.unit ? ` / ${e.unit}` : ""}`,
+      amount: m(e.qty * Number(e.unit_price)),
+    })),
+    charges,
+    settlement,
+    receipt,
+    payments: showPayments
+      ? b.payments.map((p) => ({ date: stamp(p.received_at), method: METHOD[p.method] ?? p.method, reference: p.reference ?? "", amount: m(p.amount) }))
+      : [],
+    location: (kind === "confirmed" || kind === "reminder") && cfg.locationText ? { text: cfg.locationText, mapsUrl: cfg.mapsUrl } : undefined,
+    cta: kind === "cancelled" ? undefined : { label: "View your booking", url: `${siteUrl()}/bookings/${b.id}` },
+    courtName: cfg.courtName,
+    tagline: cfg.tagline,
+    // The full-size logo is ~1.6 MB; the 180px icon is plenty at 84px and loads fast in inboxes.
+    logoUrl: !cfg.logoUrl || cfg.logoUrl === "/brand/logo.png" ? absUrl("/brand/apple-touch-icon.png") : absUrl(cfg.logoUrl),
+    siteUrl: siteUrl(),
+    contact: { phone: cfg.contactNumber, email: cfg.emailAddress, facebook: cfg.facebookPage },
+  };
+}
+
+/** Plain-text twin of the HTML email, for clients that don't show HTML. */
+function plainText(v: BookingEmailView): string {
+  const rows = (r: EmailRow[]) => r.map((x) => `${x.label}: ${x.value}`).join("\n");
+  const ways = [v.contact.phone, v.contact.email, v.contact.facebook].filter(Boolean);
+  return [
+    v.greeting,
+    v.intro.join("\n\n"),
+    `Booking reference: ${v.reference}`,
+    v.receipt ? `${v.receipt.title.toUpperCase()}\n${rows(v.receipt.rows)}` : "",
+    v.schedule.map((s) => `${s.court}: ${s.date}, ${s.time}`).join("\n"),
+    v.equipment.map((e) => `${e.name} (${e.detail}): ${e.amount}`).join("\n"),
+    rows([...v.charges, ...v.settlement]),
+    v.payments.length ? "Payments received:\n" + v.payments.map((p) => `${p.date} · ${p.method}${p.reference ? ` · Ref ${p.reference}` : ""} · ${p.amount}`).join("\n") : "",
+    v.location ? `Where: ${v.location.text}${v.location.mapsUrl ? `\nMap: ${v.location.mapsUrl}` : ""}` : "",
+    v.cta ? `${v.cta.label}: ${v.cta.url}` : "",
+    ways.length ? `Questions? Message us: ${ways.join(" · ")}` : "",
+    v.courtName,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/** Builds a booking email without sending it. */
+export async function renderBookingEmail(kind: BookingEmailKind, b: BookingDetail, payment?: Payment, cfg?: SiteConfig) {
+  const v = buildView(kind, b, cfg ?? (await getConfig()), payment);
+  return { subject: v.subject, text: plainText(v), html: renderBookingEmailHtml(v) };
+}
+
+/** Guest emails about one booking ("submitted" also alerts the admin). Silently skips when email is off. */
+export async function sendBookingEmail(kind: BookingEmailKind, b: BookingDetail, payment?: Payment): Promise<boolean> {
+  const cfg = await getConfig();
+  const { subject, text, html } = await renderBookingEmail(kind, b, payment, cfg);
   const to: string[] = [];
   if (b.guest_email) to.push(b.guest_email);
   if (kind === "submitted" && cfg.adminEmail) to.push(cfg.adminEmail);
-  return sendMail(to, subject, body);
+  return sendMail(to, subject, text, html);
 }
+
