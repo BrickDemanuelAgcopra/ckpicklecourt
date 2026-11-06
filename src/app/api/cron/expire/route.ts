@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { expireOverdueHolds } from "@/lib/bookings";
 import { runScheduledEmails } from "@/lib/scheduledEmails";
+import { ensureTelegramWebhook } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 
@@ -14,5 +15,6 @@ export async function GET(req: Request) {
     console.error("scheduled emails failed", e);
     return null;
   });
+  await ensureTelegramWebhook(); // website chat replies; a no-op after the first success
   return NextResponse.json({ expired: n, emails });
 }

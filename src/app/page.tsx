@@ -2,6 +2,8 @@ import Splash from "@/components/Splash";
 import Hero from "@/components/Hero";
 import BookingWidget from "@/components/BookingWidget";
 import PublicShell from "@/components/PublicShell";
+import ChatWidget from "@/components/ChatWidget";
+import { telegramEnabled } from "@/lib/telegram";
 import { CourtInfo, OpenPlayBanner, Rates } from "@/components/Sections";
 import { getConfig, getEquipment, getRateBands } from "@/lib/config";
 import { getDayGrid } from "@/lib/availability";
@@ -27,6 +29,14 @@ export default async function Home() {
           <CourtInfo cfg={cfg} bands={bands} equipment={equipment} />
         </div>
       </PublicShell>
+      <ChatWidget
+        enabled={telegramEnabled()}
+        courtName={cfg.courtName}
+        logoUrl={cfg.logoUrl}
+        faqs={cfg.faqs ?? []}
+        contactNumber={cfg.contactNumber}
+        facebookPage={cfg.facebookPage}
+      />
     </>
   );
 }

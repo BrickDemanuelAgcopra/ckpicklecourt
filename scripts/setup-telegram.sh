@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Turns on Telegram alerts to the owner for new bookings. Run on the server in a real terminal:
+# Turns on Telegram alerts to the owner for new bookings, and the homepage chat (guests' messages arrive
+# in the same chats; reply to one in Telegram to answer on the website). Run on the server in a real terminal:
 #   ssh -t ckpicklecourt 'bash /opt/ckpicklecourt/scripts/setup-telegram.sh'
 # Before running: in Telegram, message @BotFather, send /newbot, and copy the token it gives you.
 # Safe to re-run (e.g. to add another phone or switch to a group chat).
@@ -15,6 +16,9 @@ try: print(json.load(sys.stdin)["result"]["username"])
 except Exception: pass')
 if [ -z "$BOT" ]; then echo "✗ That token didn't work. Copy it again from @BotFather and re-run."; exit 1; fi
 echo "✓ Bot found: @$BOT"
+# The site points the bot's webhook at itself for website-chat replies, which blocks getUpdates below.
+# Clear it here; the app sets it again within a minute of the restart at the end.
+curl -fsS -o /dev/null "https://api.telegram.org/bot$TOKEN/deleteWebhook" || true
 echo
 echo "Now, on each phone that should get alerts, open https://t.me/$BOT and tap START."
 echo "(For a group instead: add @$BOT to the group and send any message there.)"

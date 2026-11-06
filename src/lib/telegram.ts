@@ -1,5 +1,6 @@
 // Owner alerts over Telegram. Configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (comma-separated for
 // several people or a group) in .env — scripts/setup-telegram.sh does it. Independent of the email switch.
+import { createHash } from "node:crypto";
 import { extname } from "node:path";
 import { getConfig } from "./config";
 import { money } from "./format";
@@ -7,7 +8,7 @@ import { readUpload } from "./storage";
 import { scheduleBlocks, siteUrl } from "./email";
 import type { BookingDetail } from "./types";
 
-function chatIds(): string[] {
+export function chatIds(): string[] {
   return (process.env.TELEGRAM_CHAT_ID || "")
     .split(",")
     .map((s) => s.trim())
@@ -18,15 +19,41 @@ export function telegramEnabled(): boolean {
   return Boolean(process.env.TELEGRAM_BOT_TOKEN) && chatIds().length > 0;
 }
 
-const h = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+export const h = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-async function api(method: string, body: FormData | Record<string, unknown>): Promise<void> {
+/** Calls the Bot API and returns its `result`. */
+export async function api<T = unknown>(method: string, body: FormData | Record<string, unknown>): Promise<T> {
   const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`;
   const res =
     body instanceof FormData
       ? await fetch(url, { method: "POST", body, signal: AbortSignal.timeout(20_000) })
       : await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`telegram ${method} ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return ((await res.json()) as { result: T }).result;
+}
+
+/** Secret Telegram echoes in X-Telegram-Bot-Api-Secret-Token on webhook calls. Derived from the token, so no extra setting. */
+export function webhookSecret(): string {
+  return createHash("sha256").update(`ck-webhook:${process.env.TELEGRAM_BOT_TOKEN || ""}`).digest("hex").slice(0, 48);
+}
+
+let webhookReady = false;
+/** Points the bot's webhook at this site (once per process) so staff replies reach the website chat. Never throws. */
+export async function ensureTelegramWebhook(): Promise<void> {
+  if (webhookReady || !telegramEnabled()) return;
+  const base = siteUrl();
+  if (!base.startsWith("https://")) return; // Telegram only calls https; skip in local dev
+  const url = `${base}/api/telegram/webhook`;
+  try {
+    const info = await api<{ url: string }>("getWebhookInfo", {});
+    if (info.url !== url) {
+      await api("setWebhook", { url, secret_token: webhookSecret(), allowed_updates: ["message"], drop_pending_updates: true });
+      console.log("telegram webhook set to", url);
+    }
+    webhookReady = true;
+  } catch (e) {
+    console.error("telegram setWebhook failed", e);
+  }
 }
 
 /** "New booking" alert to the owner: summary, buttons into Admin, and the receipt image. Never throws. */
