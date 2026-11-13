@@ -24,3 +24,14 @@
 .nb-total { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; color: var(--ck-ink-soft); }
 .nb-total b { font-size: 22px; color: var(--ck-ink); }
 .nb > .btn { justify-self: start; }
+
+/* Admin → Open Play */
+.op-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; }
+.op-form .field { margin: 0; }
+.op-form .op-note { grid-column: 1 / -1; }
+.op-form > .btn { justify-self: start; }
+.op-session { border: 1px solid var(--ck-line-2); border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+.op-session-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.op-session-head > div:first-child { flex: 1; min-width: 200px; }
+.op-count { display: grid; text-align: center; font-size: 18px; line-height: 1.2; }
+.op-count span { font-size: 12px; }

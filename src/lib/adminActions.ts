@@ -8,7 +8,7 @@ export async function listBookings(view: "review" | "upcoming" | "all" | "abando
   let where = "";
   const params: unknown[] = [];
   if (view === "review") where = "WHERE b.status='pending'";
-  else if (view === "upcoming") where = "WHERE b.status IN ('confirmed','balance_due') AND EXISTS (SELECT 1 FROM booking_slots s WHERE s.booking_id=b.id AND s.date >= current_date)";
+  else if (view === "upcoming") where = "WHERE b.status IN ('confirmed','balance_due') AND (EXISTS (SELECT 1 FROM booking_slots s WHERE s.booking_id=b.id AND s.date >= current_date) OR EXISTS (SELECT 1 FROM open_play_sessions o WHERE o.id=b.open_play_session_id AND o.date >= current_date))";
   else if (view === "abandoned") where = "WHERE b.status IN ('awaiting_payment','expired')";
   // a search looks everywhere, so a guest who paid by GCash but never uploaded a receipt can still be found
   else where = q?.trim() ? "WHERE true" : "WHERE b.status <> 'awaiting_payment'";
@@ -31,6 +31,17 @@ export async function setBookingStatus(actor: string, id: string, action: "confi
     cancel: ["pending", "confirmed", "balance_due", "awaiting_payment"],
   };
   if (!allowed[action].includes(b.status)) throw new BookingError(`Cannot ${action.replace("_", " ")} a booking that is ${b.status}`, "state");
+  if (action === "confirm" && b.status === "declined" && b.open_play_session_id) {
+    // a declined join gave up its spots; only bring it back if the session still has room
+    const r = await query<{ capacity: number; status: string; joined: number }>(
+      `SELECT o.capacity, o.status, COALESCE((SELECT sum(x.players) FROM bookings x WHERE x.open_play_session_id=o.id AND x.status IN ('awaiting_payment','pending','confirmed','balance_due')),0)::int AS joined
+         FROM open_play_sessions o WHERE o.id=$1`,
+      [b.open_play_session_id]
+    );
+    const s = r[0];
+    if (!s || s.status !== "open") throw new BookingError("That Open Play session was cancelled", "state");
+    if (s.joined + (b.players ?? 1) > s.capacity) throw new BookingError(`That Open Play session only has ${Math.max(0, s.capacity - s.joined)} spot(s) left`, "state");
+  }
   const next = action === "confirm" || action === "settle" ? "confirmed" : action === "confirm_partial" ? "balance_due" : action === "decline" ? "declined" : "cancelled";
   await query(
     `UPDATE bookings SET status=$2, admin_note=COALESCE($3, admin_note), updated_at=now(),
@@ -91,7 +102,7 @@ export async function recordPayment(actor: string, id: string, p: PaymentInput, 
   const b = await getBooking(id);
   if (!b) throw new BookingError("Booking not found", "not_found");
   if (!["awaiting_payment", "pending", "balance_due", "confirmed"].includes(b.status)) throw new BookingError(`Cannot record a payment on a booking that is ${b.status}`, "state");
-  if (b.status === "awaiting_payment" && !b.slots.length) throw new BookingError("This hold has already released its courts; enter it as a new booking instead.", "state");
+  if (b.status === "awaiting_payment" && !b.slots.length && !b.open_play) throw new BookingError("This hold has already released its courts; enter it as a new booking instead.", "state");
   if (!(p.amount > 0)) throw new BookingError("Enter the amount received");
   await query("INSERT INTO payments(booking_id,amount,method,reference,note,recorded_by) VALUES($1,$2,$3,$4,$5,$6)", [
     id,

@@ -199,13 +199,3 @@ function FaqItem({ q, a }: { q: string; a: string }) {
     </div>
   );
 }
-
-export function OpenPlayBanner({ enabled }: { enabled: boolean }) {
-  if (!enabled) return null;
-  return (
-    <section className="card" id="open-play" style={{ padding: 20, marginTop: 18, background: "var(--ck-green)", color: "#fff" }}>
-      <h2 style={{ color: "var(--ck-gold)", fontSize: 18 }}>Join an open play session</h2>
-      <p style={{ margin: "6px 0 0", opacity: 0.85 }}>Pay per player, meet other players, and jump straight into friendly games — no need to book a whole court. Look for the Open Play slots in the grid.</p>
-    </section>
-  );
-}

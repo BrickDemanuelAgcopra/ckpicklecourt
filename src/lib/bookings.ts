@@ -1,10 +1,11 @@
 import { randomInt } from "node:crypto";
+import type { PoolClient } from "pg";
 import { query, withTransaction } from "./db";
 import { getConfig, getEquipment, getRateBands, getCourts } from "./config";
 import { bandsForDate, equipmentAvailable, priceForHour } from "./availability";
 import { audit } from "./audit";
 import { clubParts, diffDays, isValidISO, todayISO } from "./time";
-import type { BookingDetail, BookingEquipmentRow, BookingRow, BookingSlotRow, PaymentRow } from "./types";
+import type { BookingDetail, BookingEquipmentRow, BookingOpenPlay, BookingRow, BookingSlotRow, PaymentRow } from "./types";
 
 export type NewBookingInput = {
   date: string;
@@ -19,6 +20,28 @@ export class BookingError extends Error {
   constructor(message: string, public code: string = "invalid") {
     super(message);
   }
+}
+
+/** Trimmed guest details, or a BookingError the guest can act on. */
+export function validateGuest(g: { guestName: string; guestPhone: string; guestEmail?: string }): { name: string; phone: string; email: string | null } {
+  const name = g.guestName.trim();
+  const phone = g.guestPhone.trim();
+  if (name.length < 2) throw new BookingError("Please enter your full name");
+  if (!/^[0-9+\-\s()]{7,20}$/.test(phone)) throw new BookingError("Please enter a valid contact number");
+  const email = g.guestEmail?.trim() || null;
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BookingError("Please enter a valid email address");
+  return { name, phone, email };
+}
+
+/** A confirmation ID no other booking uses, checked inside the caller's transaction. */
+export async function freshConfirmationId(c: PoolClient): Promise<string> {
+  let confirmationId = makeConfirmationId();
+  for (let i = 0; i < 5; i++) {
+    const dup = await c.query("SELECT 1 FROM bookings WHERE confirmation_id=$1", [confirmationId]);
+    if (!dup.rows.length) break;
+    confirmationId = makeConfirmationId();
+  }
+  return confirmationId;
 }
 
 function makeConfirmationId(): string {
@@ -40,12 +63,7 @@ export async function createHold(input: NewBookingInput, opts: { admin?: boolean
   if (opts.admin ? d < -60 || d > 366 : d < 0 || d > cfg.bookingWindowDays) throw new BookingError("That date is outside the booking window");
   if (!input.slots.length) throw new BookingError("Select at least one hour");
   if (input.slots.length > 12) throw new BookingError("Too many hours in one booking");
-  const name = input.guestName.trim();
-  const phone = input.guestPhone.trim();
-  if (name.length < 2) throw new BookingError("Please enter your full name");
-  if (!/^[0-9+\-\s()]{7,20}$/.test(phone)) throw new BookingError("Please enter a valid contact number");
-  const email = input.guestEmail?.trim() || null;
-  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BookingError("Please enter a valid email address");
+  const { name, phone, email } = validateGuest(input);
 
   const now = clubParts();
   const dayBands = bandsForDate(bands, input.date);
@@ -104,12 +122,7 @@ export async function createHold(input: NewBookingInput, opts: { admin?: boolean
     );
     if (ov.rows.length) throw new BookingError("One of the hours you picked is closed. Please choose again.", "conflict");
 
-    let confirmationId = makeConfirmationId();
-    for (let i = 0; i < 5; i++) {
-      const dup = await c.query("SELECT 1 FROM bookings WHERE confirmation_id=$1", [confirmationId]);
-      if (!dup.rows.length) break;
-      confirmationId = makeConfirmationId();
-    }
+    const confirmationId = await freshConfirmationId(c);
     const ins = await c.query<{ id: string; hold_expires_at: string }>(
       `INSERT INTO bookings(confirmation_id,guest_name,guest_email,guest_phone,status,subtotal,equipment_total,booking_fee,total,hold_expires_at)
        VALUES($1,$2,$3,$4,'awaiting_payment',$5,$6,$7,$8, now() + ($9 || ' minutes')::interval)
@@ -165,7 +178,14 @@ export async function hydrate(b: BookingRow): Promise<BookingDetail> {
     "SELECT id, amount, method, reference, note, received_at, recorded_by FROM payments WHERE booking_id=$1 ORDER BY received_at, id",
     [b.id]
   );
-  return { ...b, slots, equipment, payments, paid: payments.reduce((s, p) => s + Number(p.amount), 0) };
+  const op = b.open_play_session_id
+    ? await query<BookingOpenPlay>(
+        `SELECT o.id AS session_id, c.name AS court_name, to_char(o.date,'YYYY-MM-DD') AS date, o.start_hour, o.end_hour, o.price_per_player, $2::int AS players
+           FROM open_play_sessions o JOIN courts c ON c.id=o.court_id WHERE o.id=$1`,
+        [b.open_play_session_id, b.players ?? 1]
+      )
+    : [];
+  return { ...b, slots, equipment, payments, paid: payments.reduce((s, p) => s + Number(p.amount), 0), open_play: op[0] ?? null };
 }
 
 export async function submitReceipt(id: string, receiptPath: string, partial: boolean): Promise<BookingDetail> {

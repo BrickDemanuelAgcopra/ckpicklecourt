@@ -179,6 +179,19 @@ input, select, textarea { font: inherit; }
 .slot-passed { background: var(--ck-slot-passed-bg); color: var(--ck-slot-passed-text); }
 .slot-closed, .slot-unavailable { background: var(--ck-slot-closed-bg); color: var(--ck-slot-closed-text); }
 .slot-open_play { background: var(--ck-slot-openplay-bg); color: var(--ck-slot-openplay-text); }
+.slot-open_play:not(:disabled) { cursor: pointer; }
+.slot-open_play:not(:disabled):hover { filter: brightness(1.1); }
+.slot-sub { display: block; font-size: 9.5px; font-weight: 600; letter-spacing: .02em; text-transform: none; opacity: .85; }
+
+/* Open Play banner (homepage) */
+.op-banner { padding: 20px; margin-top: 18px; background: var(--ck-green); color: #fff; }
+.op-banner h2 { color: var(--ck-gold); font-size: 18px; }
+.op-banner > p { margin: 6px 0 0; opacity: .85; }
+.op-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-top: 14px; }
+.op-item { display: grid; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; font-size: 13px; cursor: pointer; }
+.op-item b { color: var(--ck-gold); }
+.op-item:hover:not(:disabled) { background: rgba(255,255,255,.16); }
+.op-item:disabled { opacity: .55; cursor: default; }
 .slot-promo { background: #fff; border: 2px solid var(--ck-slot-promo-border); color: var(--ck-gold-text); }
 
 /* Summary panel */

@@ -107,7 +107,7 @@ export default function Checkout({ cfg, booking }: { cfg: SiteConfig; booking: B
           </div>
         </div>
         <p className="muted" style={{ marginTop: 8 }}>
-          Your hours are held for {cfg.paymentWindowMinutes} minutes. Pay and upload your receipt before the timer ends, or your reservation will be released.
+          Your {booking.open_play ? "Open Play spot is" : "hours are"} held for {cfg.paymentWindowMinutes} minutes. Pay and upload your receipt before the timer ends, or your reservation will be released.
         </p>
 
         <div className="step-title">Step 1: Scan the QR code to pay</div>

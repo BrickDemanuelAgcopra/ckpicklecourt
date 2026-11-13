@@ -11,7 +11,11 @@ export async function GET() {
   const rows = await query<Record<string, unknown>>(
     `SELECT b.confirmation_id, b.status, b.guest_name, b.guest_phone, b.guest_email, b.subtotal, b.equipment_total, b.booking_fee, b.total,
             b.partial_payment, b.created_at, b.submitted_at, b.confirmed_at, b.confirmed_by,
-            string_agg(to_char(s.date,'YYYY-MM-DD') || ' ' || c.name || ' ' || s.hour || ':00', '; ' ORDER BY s.date, c.name, s.hour) AS schedule
+            COALESCE(
+              (SELECT 'Open Play ' || to_char(o.date,'YYYY-MM-DD') || ' ' || oc.name || ' ' || o.start_hour || ':00-' || o.end_hour || ':00 x' || b.players
+                 FROM open_play_sessions o JOIN courts oc ON oc.id=o.court_id WHERE o.id=b.open_play_session_id),
+              string_agg(to_char(s.date,'YYYY-MM-DD') || ' ' || c.name || ' ' || s.hour || ':00', '; ' ORDER BY s.date, c.name, s.hour)
+            ) AS schedule
        FROM bookings b
        LEFT JOIN booking_slots s ON s.booking_id = b.id
        LEFT JOIN courts c ON c.id = s.court_id

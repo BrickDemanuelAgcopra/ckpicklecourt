@@ -32,7 +32,7 @@ export async function runScheduledEmails(): Promise<{ reminders: number; summary
     const due = await query<{ id: string }>(
       `SELECT b.id FROM bookings b
         WHERE b.status = ANY($1) AND coalesce(b.guest_email,'') <> ''
-          AND (SELECT min(date) FROM booking_slots WHERE booking_id=b.id) = $2::date
+          AND COALESCE((SELECT min(date) FROM booking_slots WHERE booking_id=b.id), (SELECT date FROM open_play_sessions WHERE id=b.open_play_session_id)) = $2::date
           AND (b.confirmed_at IS NULL OR b.confirmed_at < ($3::date + make_interval(hours => $4)) AT TIME ZONE 'Asia/Manila')
           AND NOT EXISTS (SELECT 1 FROM email_log l WHERE l.kind='reminder' AND l.ref=b.id::text)`,
       [LIVE, addDaysISO(today, 1), today, REMINDER_HOUR]

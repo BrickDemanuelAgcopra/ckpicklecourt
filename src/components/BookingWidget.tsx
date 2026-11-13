@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ic } from "./Icons";
 import { scrollToId } from "./Header";
+import OpenPlayJoinModal, { OPEN_PLAY_EVENT } from "./OpenPlayJoin";
 import { money } from "@/lib/format";
 import { addDaysISO, hourParts, longDate, monthRangeLabel, rangeLabel, shortDay } from "@/lib/time";
-import type { DayGrid, Equipment, GridCell, SiteConfig } from "@/lib/types";
+import type { DayGrid, Equipment, GridCell, OpenPlayPublic, SiteConfig } from "@/lib/types";
 
 type Sel = { courtId: number; hour: number; price: number };
 
@@ -26,6 +27,7 @@ export default function BookingWidget({ cfg, today, initial, equipment }: { cfg:
   const [sel, setSel] = useState<Sel[]>([]);
   const [step, setStep] = useState<"none" | "details" | "equipment">("none");
   const [loading, setLoading] = useState(false);
+  const [joining, setJoining] = useState<OpenPlayPublic | null>(null);
   const maxDate = addDaysISO(today, cfg.bookingWindowDays);
   const sym = cfg.currencySymbol;
 
@@ -45,6 +47,22 @@ export default function BookingWidget({ cfg, today, initial, equipment }: { cfg:
     setSel([]);
     load(d);
   };
+  // the homepage banner asks to join a session that may be on another day
+  useEffect(() => {
+    const onJoin = (e: Event) => {
+      const s = (e as CustomEvent<OpenPlayPublic>).detail;
+      if (s.date !== date) {
+        setDate(s.date);
+        setSel([]);
+        load(s.date);
+        setStripStart(s.date < addDaysISO(today, 14) ? today : s.date);
+      }
+      setJoining(s);
+    };
+    window.addEventListener(OPEN_PLAY_EVENT, onJoin);
+    return () => window.removeEventListener(OPEN_PLAY_EVENT, onJoin);
+  }, [date, load, today]);
+
   const stripDays = useMemo(() => Array.from({ length: 14 }, (_, i) => addDaysISO(stripStart, i)), [stripStart]);
 
   const cellMap = useMemo(() => {
@@ -54,7 +72,11 @@ export default function BookingWidget({ cfg, today, initial, equipment }: { cfg:
   }, [grid]);
 
   const toggle = (c: GridCell) => {
-    if (c.status === "open_play") return; // open play join flow handled separately
+    if (c.status === "open_play") {
+      const s = grid.openPlay?.find((x) => x.id === c.sessionId);
+      if (s) setJoining(s);
+      return;
+    }
     if (c.status !== "open" && c.status !== "promo") return;
     setSel((s) => {
       const i = s.findIndex((x) => x.courtId === c.courtId && x.hour === c.hour);
@@ -67,7 +89,7 @@ export default function BookingWidget({ cfg, today, initial, equipment }: { cfg:
   const byCourt = grid.courts.map((c) => ({ court: c, hours: sel.filter((s) => s.courtId === c.id) })).filter((g) => g.hours.length);
 
   const slotTitle = (c: GridCell) =>
-    c.status === "booked" ? "Already booked" : c.status === "pending" ? "Pending approval" : c.status === "unavailable" ? "This court is temporarily unavailable" : c.status === "closed" ? "This hour is closed" : c.status === "passed" ? "This time has passed" : c.status === "open_play" ? "Tap to join Open Play" : "Tap to select";
+    c.status === "booked" ? "Already booked" : c.status === "pending" ? "Pending approval" : c.status === "unavailable" ? "This court is temporarily unavailable" : c.status === "closed" ? "This hour is closed" : c.status === "passed" ? "This time has passed" : c.status === "open_play" ? (c.sessionId ? (c.label === "Full" ? "Open Play is full" : "Tap to join Open Play") : "Open Play") : "Tap to select";
 
   return (
     <>
@@ -195,6 +217,8 @@ export default function BookingWidget({ cfg, today, initial, equipment }: { cfg:
         </aside>
       </section>
 
+      {joining && <OpenPlayJoinModal cfg={cfg} session={joining} onClose={() => setJoining(null)} onConflict={() => load(date)} />}
+
       {step !== "none" && (
         <DetailsFlow
           cfg={cfg}
@@ -271,10 +295,12 @@ function GridBandRows({ band, courts, cellMap, sel, onToggle, sym, showSep, slot
               const selected = sel.some((s) => s.courtId === c.id && s.hour === h);
               const cls = selected ? "slot-selected" : `slot-${cell.status}`;
               const text = selected ? "Selected" : cell.status === "booked" ? `Booked${cell.label ? ` (${cell.label})` : ""}` : cell.status === "open_play" ? "Open Play" : cell.status === "promo" ? `Promo ${money(cell.price, sym)}` : cell.status.replace("_", " ");
-              const clickable = cell.status === "open" || cell.status === "promo" || selected;
+              const joinable = cell.status === "open_play" && !!cell.sessionId && cell.label !== "Full";
+              const clickable = cell.status === "open" || cell.status === "promo" || selected || joinable;
               return (
                 <button key={c.id} className={`slot ${cls}`} disabled={!clickable} title={slotTitle(cell)} onClick={() => onToggle(cell)}>
                   {text}
+                  {cell.status === "open_play" && cell.sessionId && <small className="slot-sub">{cell.label}</small>}
                 </button>
               );
             })}

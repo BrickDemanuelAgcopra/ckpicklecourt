@@ -8,6 +8,7 @@ const LINKS: [string, string, "owner"?][] = [
   ["/admin/analytics", "Analytics"],
   ["/admin/bookings", "Bookings"],
   ["/admin/grid", "Court grid"],
+  ["/admin/open-play", "Open Play"],
   ["/admin/equipment", "Equipment"],
   ["/admin/settings", "Settings"],
   ["/admin/account", "My account"],

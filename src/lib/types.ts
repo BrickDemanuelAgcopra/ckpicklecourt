@@ -53,6 +53,22 @@ export type GridCell = {
   status: SlotStatus;
   price: number;
   label?: string; // e.g. initials for booked
+  /** Open Play session covering this cell. */
+  sessionId?: number;
+};
+
+/** What a guest needs to see before joining an Open Play session. */
+export type OpenPlayPublic = {
+  id: number;
+  courtId: number;
+  courtName: string;
+  date: string; // YYYY-MM-DD
+  startHour: number;
+  endHour: number;
+  pricePerPlayer: number;
+  capacity: number;
+  joined: number;
+  note: string | null;
 };
 
 export type GridBand = { id: number; name: string; startHour: number; endHour: number; price: number; hours: number[] };
@@ -62,6 +78,7 @@ export type DayGrid = {
   courts: Court[];
   bands: GridBand[];
   cells: GridCell[];
+  openPlay: OpenPlayPublic[];
 };
 
 export type BookingStatus =
@@ -93,8 +110,13 @@ export type BookingRow = {
   confirmed_at: string | null;
   confirmed_by: string | null;
   source: "online" | "admin";
+  open_play_session_id: number | null;
+  players: number | null;
   created_at: string;
 };
+
+/** The session an Open Play booking joined. */
+export type BookingOpenPlay = { session_id: number; court_name: string; date: string; start_hour: number; end_hour: number; price_per_player: string; players: number };
 
 export type BookingSlotRow = { court_id: number; court_name: string; date: string; hour: number; price: string };
 export type BookingEquipmentRow = { equipment_id: number; name: string; unit: string; qty: number; unit_price: string };
@@ -102,4 +124,4 @@ export type BookingEquipmentRow = { equipment_id: number; name: string; unit: st
 export type PaymentMethod = "gcash" | "maya" | "gotyme" | "cash" | "bank" | "other";
 export type PaymentRow = { id: number; amount: string; method: PaymentMethod; reference: string | null; note: string | null; received_at: string; recorded_by: string };
 
-export type BookingDetail = BookingRow & { slots: BookingSlotRow[]; equipment: BookingEquipmentRow[]; payments: PaymentRow[]; paid: number };
+export type BookingDetail = BookingRow & { slots: BookingSlotRow[]; equipment: BookingEquipmentRow[]; payments: PaymentRow[]; paid: number; open_play: BookingOpenPlay | null };

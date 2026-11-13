@@ -103,6 +103,14 @@ export default function BookingsTable({
                     {b.guest_email && <div className="muted">{b.guest_email}</div>}
                   </td>
                   <td>
+                    {b.open_play && (
+                      <div style={{ whiteSpace: "nowrap" }}>
+                        <span className="status-chip chip-gold" style={{ padding: "1px 8px", fontSize: 10.5 }}>Open Play</span> {b.open_play.date} · {b.open_play.court_name} · {hourLabel(b.open_play.start_hour)}–{hourLabel(b.open_play.end_hour)}
+                        <div className="muted">
+                          {b.open_play.players} player{b.open_play.players === 1 ? "" : "s"}
+                        </div>
+                      </div>
+                    )}
                     {b.slots.map((s) => (
                       <div key={`${s.court_id}-${s.date}-${s.hour}`} style={{ whiteSpace: "nowrap" }}>
                         {s.date} · {s.court_name} · {hourLabel(s.hour)}–{hourLabel(s.hour + 1)}
@@ -157,7 +165,7 @@ export default function BookingsTable({
                           Collect balance
                         </button>
                       )}
-                      {b.status === "awaiting_payment" && b.slots.length > 0 && (
+                      {b.status === "awaiting_payment" && (b.slots.length > 0 || b.open_play) && (
                         <button className="btn btn-primary btn-sm" disabled={busy === b.id} onClick={() => setPaying(b)} title="Guest paid but didn't upload a receipt">
                           Mark as paid
                         </button>

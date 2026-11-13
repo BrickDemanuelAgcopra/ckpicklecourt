@@ -22,6 +22,22 @@ export function BookingCard({ b, sym, showLink = true }: { b: BookingDetail; sym
         <span className="muted">Name</span>
         <b>{b.guest_name}</b>
       </div>
+      {b.open_play && (
+        <div>
+          <div className="court-label">{longDate(b.open_play.date).toUpperCase()}</div>
+          <div className="line">
+            <span>
+              Open Play · {b.open_play.court_name} · {hourLabel(b.open_play.start_hour)} – {hourLabel(b.open_play.end_hour)}
+            </span>
+          </div>
+          <div className="line">
+            <span>
+              {b.open_play.players} player{b.open_play.players === 1 ? "" : "s"} × {money(b.open_play.price_per_player, sym)}
+            </span>
+            <b>{money(b.subtotal, sym)}</b>
+          </div>
+        </div>
+      )}
       {[...byDate.entries()].map(([d, slots]) => (
         <div key={d}>
           <div className="court-label">{longDate(d).toUpperCase()}</div>

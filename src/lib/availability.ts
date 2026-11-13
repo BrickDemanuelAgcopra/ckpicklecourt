@@ -1,6 +1,7 @@
 import { query } from "./db";
 import { getCourts, getRateBands } from "./config";
 import { clubParts, todayISO, weekdayOfISO } from "./time";
+import { openPlayForDate } from "./openPlayQueries";
 import type { DayGrid, GridBand, GridCell, RateBand, SlotStatus } from "./types";
 
 /** Hours a band covers, honouring end_hour 24 = midnight. */
@@ -48,6 +49,9 @@ export async function getDayGrid(iso: string): Promise<DayGrid> {
     [iso]
   );
 
+  const openPlay = await openPlayForDate(iso);
+  const sessionById = new Map(openPlay.map((s) => [s.id, s]));
+
   const today = todayISO();
   const now = clubParts();
   const isPast = (hour: number) => iso < today || (iso === today && hour <= now.hour);
@@ -82,6 +86,14 @@ export async function getDayGrid(iso: string): Promise<DayGrid> {
         else if (ovMap.has(key)) {
           const o = ovMap.get(key)!;
           status = o.kind === "closed" ? "closed" : o.kind === "open_play" ? "open_play" : "promo";
+          const session = o.kind === "open_play" && o.ref_id != null ? sessionById.get(o.ref_id) : undefined;
+          if (session) {
+            const left = Math.max(0, session.capacity - session.joined);
+            price = session.pricePerPlayer;
+            label = left ? `${left} spot${left === 1 ? "" : "s"} left` : "Full";
+            cells.push({ courtId: c.id, hour, status, price, label, sessionId: session.id });
+            continue;
+          }
         } else if (slotMap.has(key)) {
           const s = slotMap.get(key)!;
           if (s.status === "confirmed" || s.status === "balance_due") {
@@ -93,7 +105,7 @@ export async function getDayGrid(iso: string): Promise<DayGrid> {
       }
     }
   }
-  return { date: iso, courts, bands: gridBands, cells };
+  return { date: iso, courts, bands: gridBands, cells, openPlay };
 }
 
 /** Units of an equipment item still free for every hour in `hours` on `date`. */

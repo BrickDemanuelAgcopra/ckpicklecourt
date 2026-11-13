@@ -49,6 +49,10 @@ const METHOD: Record<PaymentMethod, string> = { gcash: "GCash", maya: "Maya", go
 /** Back-to-back hours on the same court and day merged into one entry. */
 export function scheduleBlocks(b: BookingDetail): { court: string; date: string; time: string }[] {
   const out: { court: string; date: string; time: string }[] = [];
+  if (b.open_play) {
+    const o = b.open_play;
+    out.push({ court: `Open Play · ${o.court_name}`, date: longDate(o.date), time: `${hourLabel(o.start_hour)} – ${hourLabel(o.end_hour)} (${o.players} ${o.players === 1 ? "player" : "players"})` });
+  }
   const slots = [...b.slots].sort((x, y) => x.date.localeCompare(y.date) || x.court_name.localeCompare(y.court_name) || x.hour - y.hour);
   for (let i = 0; i < slots.length; ) {
     const s = slots[i];
@@ -114,7 +118,9 @@ function buildView(kind: BookingEmailKind, b: BookingDetail, cfg: SiteConfig, pa
     reminder: ["Just a friendly reminder that your court is booked for tomorrow. Please arrive a few minutes early to warm up."],
   }[kind];
 
-  const charges: EmailRow[] = [{ label: "Court fees", value: m(b.subtotal) }];
+  const charges: EmailRow[] = [
+    b.open_play ? { label: `Open Play (${b.open_play.players} × ${m(b.open_play.price_per_player)})`, value: m(b.subtotal) } : { label: "Court fees", value: m(b.subtotal) },
+  ];
   if (Number(b.equipment_total) > 0) charges.push({ label: "Equipment rental", value: m(b.equipment_total) });
   if (Number(b.booking_fee) > 0) charges.push({ label: "Booking fee", value: m(b.booking_fee) });
   charges.push({ label: "Total", value: m(total), strong: true });
@@ -209,6 +215,7 @@ export function renderAdminNewBookingEmail(b: BookingDetail, cfg: SiteConfig) {
   const total = Number(b.total);
   const expected = b.partial_payment && b.partial_percent ? Math.round((total * b.partial_percent) / 100) : total;
   const slotCount = b.slots.length;
+  const what = b.open_play ? `Open Play, ${b.open_play.players} ${b.open_play.players === 1 ? "player" : "players"}` : `${slotCount} ${slotCount === 1 ? "hour" : "hours"}`;
   const guest: EmailRow[] = [
     { label: "Name", value: b.guest_name },
     { label: "Phone", value: b.guest_phone || "—" },
@@ -219,7 +226,7 @@ export function renderAdminNewBookingEmail(b: BookingDetail, cfg: SiteConfig) {
   const adminUrl = `${siteUrl()}/admin/bookings?view=review&q=${encodeURIComponent(b.confirmation_id)}`;
   const view: BookingEmailView = {
     ...v,
-    preheader: `${b.guest_name} · ${slotCount} ${slotCount === 1 ? "hour" : "hours"} · ${m(total)} · receipt attached`,
+    preheader: `${b.guest_name} · ${what} · ${m(total)} · receipt attached`,
     badge: "New booking",
     tone: "gold",
     heading: "New booking to review",

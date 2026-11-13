@@ -4,7 +4,9 @@ import BookingWidget from "@/components/BookingWidget";
 import PublicShell from "@/components/PublicShell";
 import ChatWidget from "@/components/ChatWidget";
 import { telegramEnabled } from "@/lib/telegram";
-import { CourtInfo, OpenPlayBanner, Rates } from "@/components/Sections";
+import { CourtInfo, Rates } from "@/components/Sections";
+import { OpenPlayBanner } from "@/components/OpenPlayJoin";
+import { upcomingOpenPlay } from "@/lib/openPlayQueries";
 import { getConfig, getEquipment, getRateBands } from "@/lib/config";
 import { getDayGrid } from "@/lib/availability";
 import { expireOverdueHolds } from "@/lib/bookings";
@@ -15,15 +17,14 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   await expireOverdueHolds().catch(() => {});
   const today = todayISO();
-  const [cfg, bands, equipment, grid] = await Promise.all([getConfig(), getRateBands(), getEquipment(), getDayGrid(today)]);
-  const openPlay = await hasOpenPlay();
+  const [cfg, bands, equipment, grid, openPlay] = await Promise.all([getConfig(), getRateBands(), getEquipment(), getDayGrid(today), upcomingOpenPlay()]);
   return (
     <>
       <Splash name={cfg.courtName} logoUrl={cfg.logoUrl} />
       <PublicShell cfg={cfg}>
         <Hero cfg={cfg} courtCount={grid.courts.length} />
         <Rates bands={bands} sym={cfg.currencySymbol} />
-        <OpenPlayBanner enabled={openPlay} />
+        <OpenPlayBanner sessions={openPlay} sym={cfg.currencySymbol} />
         <BookingWidget cfg={cfg} today={today} initial={grid} equipment={equipment} />
         <div className="card" style={{ marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
           <CourtInfo cfg={cfg} bands={bands} equipment={equipment} />
@@ -41,8 +42,3 @@ export default async function Home() {
   );
 }
 
-async function hasOpenPlay(): Promise<boolean> {
-  const { query } = await import("@/lib/db");
-  const rows = await query<{ n: number }>("SELECT count(*)::int AS n FROM open_play_sessions WHERE status='open' AND date >= current_date");
-  return rows[0]?.n > 0;
-}
