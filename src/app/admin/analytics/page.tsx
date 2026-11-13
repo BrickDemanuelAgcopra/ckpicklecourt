@@ -271,7 +271,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <span>Next 7 days</span>
           <b>{s.next7Hours} hrs</b>
           <small>
-            {money(s.next7Revenue)} court fees · {pct(s.next7Capacity ? s.next7Hours / s.next7Capacity : 0)} full
+            {money(s.next7Revenue)} booked · {pct(s.next7Capacity ? s.next7Hours / s.next7Capacity : 0)} full
           </small>
         </Link>
       </div>
@@ -317,8 +317,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             money={money}
             parts={[
               { label: "Court fees", value: a.mix.court, tone: "green" },
+              { label: "Open Play", value: a.mix.openPlay, tone: "blue" },
               { label: "Equipment", value: a.mix.equipment, tone: "gold" },
-              { label: "Booking fees", value: a.mix.fees, tone: "blue" },
+              { label: "Booking fees", value: a.mix.fees, tone: "plum" },
             ]}
           />
           <h4 className="panel-h4">Money received in this period</h4>
@@ -343,7 +344,39 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         </Panel>
 
         <Panel title="Revenue by court">
-          <Bars rows={a.byCourt.map((c) => ({ ...c, sub: `${c.hours} hrs · ${pct(c.occupancy)} full` }))} fmt={money} />
+          <Bars rows={a.byCourt.map((c) => ({ ...c, sub: `${c.hours} hrs · ${pct(c.occupancy)} full${c.openPlay ? ` · incl. ${money(c.openPlay)} Open Play` : ""}` }))} fmt={money} />
+        </Panel>
+
+        <Panel title="Open Play" sub="Player fees from confirmed and partly paid joins, by session date.">
+          {a.openPlay.sessions ? (
+            <>
+              <div className="mini-stats">
+                <div>
+                  <b>{money(a.openPlay.revenue)}</b>
+                  <span>player fees</span>
+                </div>
+                <div>
+                  <b>{a.openPlay.sessions}</b>
+                  <span>sessions</span>
+                </div>
+                <div>
+                  <b>{a.openPlay.players}</b>
+                  <span>players</span>
+                </div>
+                <div>
+                  <b>{pct(a.openPlay.capacity ? a.openPlay.players / a.openPlay.capacity : 0)}</b>
+                  <span>spots filled</span>
+                </div>
+              </div>
+              <Bars rows={a.openPlay.bySession} fmt={money} tone="blue" />
+              <p className="panel-foot">
+                Player fees <Delta cur={a.openPlay.revenue} prev={a.openPlay.prevRevenue} />.
+                {a.openPlay.sessions > a.openPlay.bySession.length ? ` Showing the latest ${a.openPlay.bySession.length} sessions.` : ""}
+              </p>
+            </>
+          ) : (
+            <p className="empty">No Open Play sessions in this period.</p>
+          )}
         </Panel>
 
         <Panel title="Revenue by rate">
@@ -388,8 +421,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <Columns rows={a.leadTime} total={a.leadTime.reduce((t, r) => t + r.value, 0)} />
         </Panel>
 
-        <Panel title="Session length" sub="Hours per booking.">
-          <Columns rows={a.duration} total={live} />
+        <Panel title="Session length" sub="Hours per court booking (Open Play not included).">
+          <Columns rows={a.duration} total={a.duration.reduce((t, r) => t + r.value, 0)} />
         </Panel>
 
         <Panel title="Equipment rentals" sub={live ? `${pct(a.equipmentAttach)} of bookings added equipment.` : undefined}>

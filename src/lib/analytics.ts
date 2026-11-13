@@ -32,6 +32,18 @@ type BookingRow = {
   confirmed_at: Date | null;
   play_date: string | null;
   hours: number;
+  /** Set on Open Play joins: money for spots in a session, no court hours of its own. */
+  open_play_session_id: number | null;
+  players: number | null;
+};
+
+export type OpenPlayStats = {
+  sessions: number;
+  players: number;
+  capacity: number;
+  revenue: number; // player fees from confirmed and partly paid joins, by session date
+  prevRevenue: number;
+  bySession: BarRow[];
 };
 
 export type Bucket = { key: string; label: string; revenue: number; bookings: number; hours: number };
@@ -58,10 +70,11 @@ export type Analytics = {
   prev: Kpis;
   snapshot: { pendingCount: number; pendingValue: number; awaitingCount: number; balanceCount: number; balanceValue: number; next7Hours: number; next7Revenue: number; next7Capacity: number };
   trend: Bucket[];
-  mix: { court: number; equipment: number; fees: number };
+  mix: { court: number; openPlay: number; equipment: number; fees: number };
+  openPlay: OpenPlayStats;
   payments: { full: number; partial: number };
   heatmap: { hours: number[]; cells: { booked: number; capacity: number }[][] }; // cells[weekday][hourIndex]
-  byCourt: (BarRow & { hours: number; occupancy: number })[];
+  byCourt: (BarRow & { hours: number; occupancy: number; openPlay: number })[];
   byBand: (BarRow & { hours: number; occupancy: number; price: number })[];
   byWeekday: BarRow[];
   funnel: { started: number; submitted: number; confirmed: number; expired: number; declined: number; cancelled: number; open: number };
@@ -91,7 +104,10 @@ export function resolveRange(sp: { range?: string; from?: string; to?: string },
 }
 
 export async function earliestPlayDate(): Promise<string | null> {
-  const r = await query<{ d: string | null }>("SELECT to_char(min(date),'YYYY-MM-DD') AS d FROM booking_slots");
+  const r = await query<{ d: string | null }>(
+    `SELECT to_char(least((SELECT min(date) FROM booking_slots),
+                          (SELECT min(o.date) FROM open_play_sessions o WHERE EXISTS (SELECT 1 FROM bookings b WHERE b.open_play_session_id=o.id))),'YYYY-MM-DD') AS d`
+  );
   return r[0]?.d ?? null;
 }
 
@@ -127,14 +143,16 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
   const BOOKING_COLS = `b.id, b.status, b.guest_name, b.guest_phone, b.subtotal, b.equipment_total, b.booking_fee, b.total, b.partial_percent, b.source,
     coalesce((SELECT sum(amount) FROM payments WHERE booking_id=b.id),0) AS paid,
     b.created_at, b.submitted_at, b.confirmed_at,
-    to_char(s.play_date,'YYYY-MM-DD') AS play_date, coalesce(s.hours,0)::int AS hours`;
-  const SLOT_AGG = `LEFT JOIN LATERAL (SELECT min(date) AS play_date, count(*) AS hours FROM booking_slots WHERE booking_id=b.id) s ON true`;
+    to_char(coalesce(s.play_date, op.date),'YYYY-MM-DD') AS play_date, coalesce(s.hours,0)::int AS hours, b.open_play_session_id, b.players`;
+  // an Open Play join is played on its session's date
+  const SLOT_AGG = `LEFT JOIN LATERAL (SELECT min(date) AS play_date, count(*) AS hours FROM booking_slots WHERE booking_id=b.id) s ON true
+    LEFT JOIN open_play_sessions op ON op.id = b.open_play_session_id`;
 
-  const [courts, bands, live, created, slots, overrides, equipment, firstSeen, snapshot, next7, methods] = await Promise.all([
+  const [courts, bands, live, created, slots, overrides, equipment, firstSeen, snapshot, next7, methods, sessions] = await Promise.all([
     getCourts(),
     getRateBands(),
     // live bookings played in this period or the previous one (for deltas)
-    query<BookingRow>(`SELECT ${BOOKING_COLS} FROM bookings b ${SLOT_AGG} WHERE b.status = ANY($1) AND s.play_date BETWEEN $2 AND $3`, [LIVE, prevFrom, to]),
+    query<BookingRow>(`SELECT ${BOOKING_COLS} FROM bookings b ${SLOT_AGG} WHERE b.status = ANY($1) AND coalesce(s.play_date, op.date) BETWEEN $2 AND $3`, [LIVE, prevFrom, to]),
     // everything started in the period, for the funnel (released holds have no slots left)
     query<BookingRow>(`SELECT ${BOOKING_COLS} FROM bookings b ${SLOT_AGG} WHERE (b.created_at AT TIME ZONE 'Asia/Manila')::date BETWEEN $1 AND $2`, [from, to]),
     query<{ court_id: number; date: string; hour: number; price: string }>(
@@ -154,8 +172,11 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
       [LIVE, from, to]
     ),
     query<{ phone: string; first: string }>(
-      `SELECT right(regexp_replace(b.guest_phone,'\\D','','g'),10) AS phone, to_char(min(s.date),'YYYY-MM-DD') AS first
-       FROM bookings b JOIN booking_slots s ON s.booking_id=b.id WHERE b.status = ANY($1) GROUP BY 1`,
+      `SELECT right(regexp_replace(b.guest_phone,'\\D','','g'),10) AS phone, to_char(min(x.date),'YYYY-MM-DD') AS first
+       FROM bookings b
+       JOIN (SELECT booking_id, date FROM booking_slots
+             UNION ALL SELECT b2.id, o.date FROM bookings b2 JOIN open_play_sessions o ON o.id=b2.open_play_session_id) x ON x.booking_id=b.id
+       WHERE b.status = ANY($1) GROUP BY 1`,
       [LIVE]
     ),
     query<{ status: string; c: string; v: string; due: string }>(
@@ -163,9 +184,11 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
               sum(greatest(total - coalesce((SELECT sum(amount) FROM payments p WHERE p.booking_id=b.id),0), 0)) AS due
        FROM bookings b WHERE status IN ('pending','awaiting_payment','balance_due') GROUP BY status`
     ),
-    query<{ hours: string; revenue: string }>(
-      `SELECT count(*) AS hours, coalesce(sum(s.price),0) AS revenue FROM booking_slots s JOIN bookings b ON b.id=s.booking_id
-       WHERE b.status = ANY($1) AND s.date BETWEEN $2 AND $3`,
+    query<{ hours: string; revenue: string; open_play: string }>(
+      `SELECT (SELECT count(*) FROM booking_slots s JOIN bookings b ON b.id=s.booking_id WHERE b.status = ANY($1) AND s.date BETWEEN $2 AND $3) AS hours,
+              (SELECT coalesce(sum(s.price),0) FROM booking_slots s JOIN bookings b ON b.id=s.booking_id WHERE b.status = ANY($1) AND s.date BETWEEN $2 AND $3) AS revenue,
+              (SELECT coalesce(sum(b.subtotal),0) FROM bookings b JOIN open_play_sessions o ON o.id=b.open_play_session_id
+                WHERE b.status = ANY($1) AND o.date BETWEEN $2 AND $3) AS open_play`,
       [LIVE, today, addDaysISO(today, 6)]
     ),
     // money that actually came in during the period, by when it was received
@@ -173,6 +196,16 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
       `SELECT method, sum(amount) AS amount, count(*) AS c FROM payments
        WHERE (received_at AT TIME ZONE 'Asia/Manila')::date BETWEEN $1 AND $2 GROUP BY method ORDER BY 2 DESC`,
       [from, to]
+    ),
+    // Open Play sessions in this period and the previous one, with what their players paid for
+    query<{ id: number; court_id: number; date: string; start_hour: number; capacity: number; status: string; players: number; revenue: string }>(
+      `SELECT o.id, o.court_id, to_char(o.date,'YYYY-MM-DD') AS date, o.start_hour, o.capacity, o.status,
+              coalesce(sum(b.players) FILTER (WHERE b.status = ANY($1)),0)::int AS players,
+              coalesce(sum(b.subtotal) FILTER (WHERE b.status = ANY($1)),0) AS revenue
+         FROM open_play_sessions o LEFT JOIN bookings b ON b.open_play_session_id=o.id
+        WHERE o.date BETWEEN $2 AND $3
+        GROUP BY o.id ORDER BY o.date, o.start_hour`,
+      [LIVE, prevFrom, to]
     ),
   ]);
 
@@ -238,13 +271,34 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
     if (i >= 0) cells[weekdayOfISO(s.date)][i].booked += 1;
   }
 
+  // cancelled sessions only count if someone still holds a paid spot in them
+  const curSessions = sessions.filter((x) => x.date >= from && (x.status === "open" || x.players > 0));
   const byCourt = courts
-    .filter((c) => c.available || curSlots.some((s) => s.court_id === c.id))
+    .filter((c) => c.available || curSlots.some((s) => s.court_id === c.id) || curSessions.some((x) => x.court_id === c.id && n(x.revenue) > 0))
     .map((c) => {
       const mine = curSlots.filter((s) => s.court_id === c.id);
       const cap = capacityOf(from, to, 1);
-      return { label: c.name, value: mine.reduce((t, s) => t + n(s.price), 0), hours: mine.length, occupancy: cap ? mine.length / cap : 0 };
+      const openPlay = curSessions.filter((x) => x.court_id === c.id).reduce((t, x) => t + n(x.revenue), 0);
+      return { label: c.name, value: mine.reduce((t, s) => t + n(s.price), 0) + openPlay, openPlay, hours: mine.length, occupancy: cap ? mine.length / cap : 0 };
     });
+
+  const courtName = new Map(courts.map((c) => [c.id, c.name]));
+  const hr = (h: number) => `${h % 12 || 12}${h < 12 ? "am" : "pm"}`;
+  const openPlay: OpenPlayStats = {
+    sessions: curSessions.length,
+    players: curSessions.reduce((t, x) => t + x.players, 0),
+    capacity: curSessions.reduce((t, x) => t + x.capacity, 0),
+    revenue: curSessions.reduce((t, x) => t + n(x.revenue), 0),
+    prevRevenue: sessions.filter((x) => x.date < from).reduce((t, x) => t + n(x.revenue), 0),
+    bySession: [...curSessions]
+      .sort((a, b) => b.date.localeCompare(a.date) || b.start_hour - a.start_hour)
+      .slice(0, 8)
+      .map((x) => ({
+        label: `${bucketLabel(x.date, "day")} ${hr(x.start_hour)} · ${courtName.get(x.court_id) ?? "Court"}`,
+        value: n(x.revenue),
+        sub: `${x.players}/${x.capacity} players${x.status === "cancelled" ? " · cancelled" : ""}`,
+      })),
+  };
 
   const byBand = bands.map((band) => {
     const inBand = (s: { date: string; hour: number }) =>
@@ -294,7 +348,7 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
   const leadTime = LEAD.map(([label], i) => ({ label, value: leadCounts[i] }));
 
   const durCounts = [0, 0, 0, 0];
-  for (const b of inRange) durCounts[Math.min(Math.max(b.hours, 1), 4) - 1]++;
+  for (const b of inRange) if (!b.open_play_session_id) durCounts[Math.min(Math.max(b.hours, 1), 4) - 1]++;
   const duration = ["1 hour", "2 hours", "3 hours", "4+ hours"].map((label, i) => ({ label, value: durCounts[i] }));
 
   const waits = created
@@ -339,12 +393,13 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
       balanceCount: n(snap.balance_due?.c),
       balanceValue: n(snap.balance_due?.due),
       next7Hours: n(next7[0]?.hours),
-      next7Revenue: n(next7[0]?.revenue),
+      next7Revenue: n(next7[0]?.revenue) + n(next7[0]?.open_play),
       next7Capacity: capacityOf(today, addDaysISO(today, 6)),
     },
     trend: [...buckets.values()],
     mix: {
-      court: inRange.reduce((s, r) => s + n(r.subtotal), 0),
+      court: inRange.filter((r) => !r.open_play_session_id).reduce((s, r) => s + n(r.subtotal), 0),
+      openPlay: inRange.filter((r) => r.open_play_session_id).reduce((s, r) => s + n(r.subtotal), 0),
       equipment: inRange.reduce((s, r) => s + n(r.equipment_total), 0),
       fees: inRange.reduce((s, r) => s + n(r.booking_fee), 0),
     },
@@ -353,6 +408,7 @@ export async function getAnalytics(range: RangeKey, from: string, to: string): P
     sources: { online: inRange.filter((b) => b.source !== "admin").length, admin: inRange.filter((b) => b.source === "admin").length },
     heatmap: { hours: allHours, cells },
     byCourt,
+    openPlay,
     byBand,
     byWeekday,
     funnel,

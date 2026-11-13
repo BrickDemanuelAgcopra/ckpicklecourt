@@ -2,7 +2,8 @@
 .analytics {
   --viz-1: #2e7d46; /* green — validated as a set with gold + blue on white */
   --viz-2: #c9a35a; /* gold — below 3:1, so always paired with a visible label */
-  --viz-3: #3d4faa; /* blue */
+  --viz-3: #3d4faa; /* blue (also the Open Play colour on the booking grid) */
+  --viz-4: #8a5a83; /* plum */
   --viz-grid: #ebe8df;
   --viz-base: #c9c4b2;
   --viz-ink-muted: #7f8a80;
@@ -70,6 +71,7 @@
 .bar-fill.green, .mix-seg.green, .mix-legend i.green { background: var(--viz-1); }
 .bar-fill.gold, .mix-seg.gold, .mix-legend i.gold { background: var(--viz-2); }
 .bar-fill.blue, .mix-seg.blue, .mix-legend i.blue { background: var(--viz-3); }
+.bar-fill.plum, .mix-seg.plum, .mix-legend i.plum { background: var(--viz-4); }
 .bar-value { font-size: 12.5px; font-weight: 700; color: var(--ck-ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .bar-row:hover .bar-fill { filter: brightness(1.1); }
 
